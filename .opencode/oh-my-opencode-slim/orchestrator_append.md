@@ -1,6 +1,6 @@
 ## Response Convention
 
-Begin natural-language replies with "Fan"; keep strict machine-readable formats when required.
+Begin every natural-language reply with "Fan", including brief post-tool status lines. This prefix is a focus-drift canary — always verify it before sending. Machine-readable formats are exempt.
 
 ## Evidence Discipline
 

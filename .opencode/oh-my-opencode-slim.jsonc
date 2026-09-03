@@ -30,6 +30,16 @@
       "model": "zhipuai-coding-plan/glm-5.3",
       "variant": "max"
     },
+    "improver": {
+      "displayName": "AgentImprover",
+      "description": "Retrospective analyst for agent failures: traces which agent produced unsatisfactory completed work, diagnoses the root cause, and proposes omos prompt/config fixes pending user confirmation.",
+      "model": "openai/gpt-5.6-sol",
+      "variant": "high",
+      "skills": ["oh-my-opencode-slim"],
+      "mcps": [],
+      "permission": { "edit": "ask" },
+      "orchestratorPrompt": "Delegate to @improver when the user reports that previously completed work is wrong or unsatisfactory (unfocused docs, incomplete feature implementation, wrong bug fix, poor output quality) and wants the responsible agent traced and the omos setup improved to prevent recurrence. Pass it the original request, the delegation briefs, the agent outputs, and the user's feedback. Do not delegate to @improver for ordinary code bugs, new feature work, or in-progress verification - route those to fixer/explorer as usual."
+    },
     "observer": { "displayName": "QualityEngineer" },
     "council": { "displayName": "ArchitectureCouncil" },
     "councillor": { "displayName": "CouncilReviewer" }
