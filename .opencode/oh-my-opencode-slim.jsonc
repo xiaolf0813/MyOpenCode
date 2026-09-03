@@ -1,0 +1,55 @@
+{
+  "agents": {
+    "orchestrator": {
+      "displayName": "EngineeringLead",
+      "model": ["openai/gpt-5.6-terra", "zhipuai-coding-plan/glm-5.3"],
+      "variant": "high"
+    },
+    "explorer": {
+      "displayName": "CodebaseAnalyst",
+      "model": "zhipuai-coding-plan/glm-5.3-flash",
+      "variant": "max"
+    },
+    "librarian": {
+      "displayName": "TechnicalResearcher",
+      "model": "zhipuai-coding-plan/glm-5.3-flash",
+      "variant": "medium"
+    },
+    "oracle": {
+      "displayName": "ChiefArchitect",
+      "model": "openai/gpt-5.6-sol",
+      "variant": "high"
+    },
+    "designer": {
+      "displayName": "ProductDesigner",
+      "model": "openai/gpt-5.6-luna",
+      "variant": "medium"
+    },
+    "fixer": {
+      "displayName": "SoftwareEngineer",
+      "model": "zhipuai-coding-plan/glm-5.3",
+      "variant": "max"
+    },
+    "observer": { "displayName": "QualityEngineer" },
+    "council": { "displayName": "ArchitectureCouncil" },
+    "councillor": { "displayName": "CouncilReviewer" }
+  },
+  "council": {
+    "default_preset": "three-model-review",
+    "presets": {
+      "three-model-review": {
+        "glm53": {
+          "model": "zhipuai-coding-plan/glm-5.3",
+          "variant": "max"
+        },
+        "gpt56sol": {
+          "model": "openai/gpt-5.6-sol",
+          "variant": "high"
+        },
+        "deepseekV4Pro": {
+          "model": "deepseek/deepseek-v4-pro"
+        }
+      }
+    }
+  }
+}
