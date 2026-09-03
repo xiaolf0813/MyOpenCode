@@ -14,3 +14,14 @@
    technology, history, data, and feasibility. Wherever practical, attach
    verifiable sources, command output, or file:line references to material
    conclusions.
+
+## Language Discipline
+
+1. Agent-to-agent communication must be in English. This covers task prompts
+   and delegation briefs sent to other agents, and every report or final
+   result returned to another agent.
+2. Any natural-language reply addressed to the user must be written in the
+   language of the user's latest message (e.g., reply in Simplified Chinese
+   when the user writes in Chinese).
+3. Code, identifiers, commit messages, quoted command output, and file
+   contents keep their original language and are exempt from rules 1-2.

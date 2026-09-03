@@ -2,7 +2,7 @@
   "agents": {
     "orchestrator": {
       "displayName": "EngineeringLead",
-      "model": ["openai/gpt-5.6-terra", "zhipuai-coding-plan/glm-5.3"],
+      "model": "zhipuai-coding-plan/glm-5.3",
       "variant": "high"
     },
     "explorer": {
@@ -12,7 +12,7 @@
     },
     "librarian": {
       "displayName": "TechnicalResearcher",
-      "model": "zhipuai-coding-plan/glm-5.3-flash",
+      "model": "openai/gpt-5.6-luna",
       "variant": "medium"
     },
     "oracle": {
@@ -22,8 +22,8 @@
     },
     "designer": {
       "displayName": "ProductDesigner",
-      "model": "openai/gpt-5.6-luna",
-      "variant": "medium"
+      "model": "openai/gpt-5.6-terra",
+      "variant": "high"
     },
     "fixer": {
       "displayName": "SoftwareEngineer",
