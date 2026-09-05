@@ -3,17 +3,17 @@
     "orchestrator": {
       "displayName": "EngineeringLead",
       "model": "zhipuai-coding-plan/glm-5.3",
-      "variant": "high"
+      "variant": "max"
     },
     "explorer": {
       "displayName": "CodebaseAnalyst",
       "model": "zhipuai-coding-plan/glm-5.3-flash",
-      "variant": "max"
+      "variant": "low"
     },
     "librarian": {
       "displayName": "TechnicalResearcher",
       "model": "openai/gpt-5.6-luna",
-      "variant": "medium"
+      "variant": "low"
     },
     "oracle": {
       "displayName": "ChiefArchitect",
@@ -23,7 +23,7 @@
     "designer": {
       "displayName": "ProductDesigner",
       "model": "openai/gpt-5.6-terra",
-      "variant": "high"
+      "variant": "medium"
     },
     "fixer": {
       "displayName": "SoftwareEngineer",
