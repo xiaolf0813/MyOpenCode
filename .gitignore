@@ -3,3 +3,6 @@
 
 # Windows NTFS download-zone artifacts
 *:Zone.Identifier
+
+# Local Claude settings
+.claude/settings.local.json
