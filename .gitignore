@@ -1,0 +1,5 @@
+.vscode/
+*.Identifier
+
+# Windows NTFS download-zone artifacts
+*:Zone.Identifier
