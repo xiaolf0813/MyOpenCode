@@ -1,4 +1,5 @@
 .vscode/
+node_modules/
 *.Identifier
 
 # Windows NTFS download-zone artifacts

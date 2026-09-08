@@ -1,0 +1,38 @@
+{
+  "name": "my-agents",
+  "version": "0.3.0",
+  "description": "Portable OpenCode + Claude Code agent setup: copies the .opencode/ and .claude/ agent configuration into your project.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiaolf0813/MyOpenCode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xiaolf0813/MyOpenCode/issues"
+  },
+  "bin": {
+    "my-agents": "bin/my-agents.js"
+  },
+  "files": [
+    "bin/",
+    ".opencode/AGENTS.md",
+    ".opencode/opencode.jsonc",
+    ".opencode/oh-my-opencode-slim.jsonc",
+    ".opencode/oh-my-opencode-slim/",
+    ".opencode/package.json",
+    ".claude/agents/",
+    ".claude/settings.json"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "opencode",
+    "claude",
+    "claude-code",
+    "agents",
+    "oh-my-opencode",
+    "scaffold"
+  ]
+}

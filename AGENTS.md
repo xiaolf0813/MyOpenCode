@@ -18,6 +18,7 @@ activate immediately).
 | `.opencode/oh-my-opencode-slim.jsonc` | omos project config: per-agent model, variant, displayName (e.g. `fixer` → `SoftwareEngineer`) and council presets. Merged over the user-level omos config. |
 | `.opencode/oh-my-opencode-slim/` | Prompt overrides for omos agents. |
 | `.opencode/package.json` | Plugin node dependencies (auto-installed by opencode). |
+| `package.json`, `bin/` | npm CLI package **`my-agents`**: `npx my-agents` copies `.opencode/` and `.claude/` into a target project. Pinning the omos plugin into the copied `opencode.jsonc` requires explicit consent (`--pin-omos` / interactive prompt). |
 
 `.opencode/.gitignore` keeps `node_modules/`, lockfiles, and `package.json`
 out of git: commit the configuration, never the installed artifacts.
