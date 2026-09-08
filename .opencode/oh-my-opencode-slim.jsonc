@@ -37,7 +37,7 @@
       "variant": "max",
       "skills": ["oh-my-opencode-slim"],
       "mcps": [],
-      "permission": { "edit": "ask" },
+      "permission": { "bash": "deny", "webfetch": "deny", "task": "deny", "ast_grep_replace": "deny", "edit": "ask", "write": "ask", "apply_patch": "ask", "read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "lsp": "allow", "codesearch": "allow", "ast_grep_search": "allow" },
       "orchestratorPrompt": "Delegate to @improver when the user reports that previously completed work is wrong or unsatisfactory (unfocused docs, incomplete feature implementation, wrong bug fix, poor output quality) and wants the responsible agent traced and the omos setup improved to prevent recurrence. Pass it the original request, the delegation briefs, the agent outputs, and the user's feedback. Do not delegate to @improver for ordinary code bugs, new feature work, or in-progress verification - route those to fixer/explorer as usual."
     },
     "observer": { "displayName": "QualityEngineer" },

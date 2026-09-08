@@ -24,7 +24,7 @@ You will receive from the orchestrator: the original user request, the delegatio
 
 ## Constraints
 
-- Analysis is read-only: no edits to any file before the user confirms.
+- Analysis is read-only until the user explicitly confirms a proposed prevention change: use only non-mutating read and search tools; no edits, no command execution, no process spawning, no nested OpenCode sessions, and no network access.
 - Follow Fact Discipline: label verified facts (cited), reasonable inferences, and unknowns.
 - Never rewrite a bundled prompt wholesale unless necessary; `_append.md` additions win.
 - Do not fix the faulty task output itself here — that stays with the orchestrator and fixer. Your deliverable is the diagnosis and the prevention change.
