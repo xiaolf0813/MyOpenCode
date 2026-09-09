@@ -16,7 +16,7 @@ const OMOS_PACKAGE = "oh-my-opencode-slim";
 /** Entries copied for each target set. Names are copied as-is; dirs are walked recursively. */
 const SETS = {
   opencode: {
-    from: join(PKG_ROOT, "agents", "opencode"),
+    from: join(PKG_ROOT, "agents", "backends", "opencode"),
     dest: ".opencode",
     /** Always copied: plain OpenCode setup on its default primary agents. */
     coreEntries: ["AGENTS.md", "opencode.jsonc"],
@@ -25,7 +25,7 @@ const SETS = {
   },
   claude: {
     label: ".claude/  (agents/*.md, settings.json)",
-    from: join(PKG_ROOT, "agents", "claude"),
+    from: join(PKG_ROOT, "agents", "backends", "claude"),
     dest: ".claude",
     /** Agent markdown files are assembled from agents/ source, not copied. */
     entries: ["settings.json"],
@@ -71,10 +71,10 @@ Options
 
 Notes
   The single source of truth is agents/: prompts/ holds each prompt body
-  once (with its omos attribution notice), backends/ holds per-backend
-  header metadata, and opencode/ holds the distributable OpenCode assets.
-  This repository's .claude/agents/ and .opencode/ are generated from it —
-  edit agents/ and run "my-agents assemble".
+  once (with its omos attribution notice), and backends/<name>/ holds
+  everything backend-specific — assets plus per-agent header metadata in
+  agents.json. This repository's .claude/agents/ and .opencode/ are
+  generated from it — edit agents/ and run "my-agents assemble".
 
   OpenCode target has two schemes. The non-omos scheme (default without
   consent) copies only the core config (opencode.jsonc, AGENTS.md) plus
@@ -266,7 +266,7 @@ async function askConsent(question) {
  * agents/prompts/<name>.md (which carries the omos attribution notice).
  */
 function loadBackend(name) {
-  return JSON.parse(readFileSync(join(PKG_ROOT, "agents", "backends", `${name}.json`), "utf8"));
+  return JSON.parse(readFileSync(join(PKG_ROOT, "agents", "backends", name, "agents.json"), "utf8"));
 }
 
 function assembleAgent(backend, name) {
@@ -344,16 +344,17 @@ async function applyOpencode(targetRoot, opts, counts) {
 }
 
 /**
- * Sync the distributable OpenCode assets from agents/opencode/ into this
+ * Sync the distributable OpenCode assets from agents/backends/opencode/ into this
  * repository's live .opencode/ directory. In check mode, only reports drift.
  */
 function syncOpencodeAssets({ check }) {
-  const srcRoot = join(PKG_ROOT, "agents", "opencode");
+  const srcRoot = join(PKG_ROOT, "agents", "backends", "opencode");
   const destRoot = join(PKG_ROOT, ".opencode");
   let drifted = 0;
 
   walk(srcRoot, srcRoot, (fileAbs) => {
     const rel = relative(srcRoot, fileAbs);
+    if (rel === "agents.json") return; // assembly metadata, not a target asset
     const dest = join(destRoot, rel);
     const content = readFileSync(fileAbs, "utf8");
     const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;

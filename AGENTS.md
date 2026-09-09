@@ -15,12 +15,13 @@ parses. CLI behavior changes apply on the next run.
 
 | Source (edit here) | Generated (do not hand-edit) |
 | --- | --- |
-| `agents/opencode/AGENTS.md` | `.opencode/AGENTS.md` |
-| `agents/opencode/opencode.jsonc` | `.opencode/opencode.jsonc` |
-| `agents/opencode/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
-| `agents/opencode/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
-| `agents/opencode/package.json` | `.opencode/package.json` |
-| `agents/prompts/*.md` + `agents/backends/*.json` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
+| `agents/backends/claude/settings.json` | `.claude/settings.json` |
+| `agents/backends/opencode/AGENTS.md` | `.opencode/AGENTS.md` |
+| `agents/backends/opencode/opencode.jsonc` | `.opencode/opencode.jsonc` |
+| `agents/backends/opencode/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
+| `agents/backends/opencode/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
+| `agents/backends/opencode/package.json` | `.opencode/package.json` |
+| `agents/prompts/*.md` + `agents/backends/*/agents.json` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
 
 After editing any source, run `npx my-agents assemble` in the repo root
 (`--check` verifies without writing). The generated `.claude/` and
@@ -36,8 +37,7 @@ committed or packaged.
 | `bin/my-agents.js` | The CLI (zero dependencies, ESM). |
 | `agents/prompts/` | Agent prompt bodies — single source, omos attribution included. |
 | `agents/prompts_cn/` | Chinese reference translations — never packaged. |
-| `agents/backends/*.json` | Per-backend frontmatter (claude / opencode) keyed by agent. |
-| `agents/opencode/` | Distributable OpenCode assets: core config, omos config, prompt overrides, plugin `package.json`. |
+| `agents/backends/<name>/` | Everything backend-specific: assets copied to the target plus `agents.json` (per-agent frontmatter used to assemble agent markdown). |
 | `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-agents assemble`. |
 | `package.json` | npm package **`my-agents`**; the `files` whitelist is the tarball contract. |
 
@@ -58,13 +58,13 @@ committed or packaged.
 
 - **Agent prompts / roster** → edit `agents/prompts/*.md`; keep per-backend
   frontmatter in `agents/backends/*.json` in sync; then assemble.
-- **Behavior rules** → `agents/opencode/AGENTS.md`, one rule per concern. Do
-  not duplicate rules between this root file and it.
+- **Behavior rules** → `agents/backends/opencode/AGENTS.md`, one rule per
+  concern. Do not duplicate rules between this root file and it.
 - **Model / variant / displayName / council presets** →
-  `agents/opencode/oh-my-opencode-slim.jsonc`. Keep JSONC parseable (comments
-  and trailing commas allowed).
+  `agents/backends/opencode/oh-my-opencode-slim.jsonc`. Keep JSONC parseable
+  (comments and trailing commas allowed).
 - **Prompt tuning** → append-only, via
-  `agents/opencode/oh-my-opencode-slim/<agent>_append.md`
+  `agents/backends/opencode/oh-my-opencode-slim/<agent>_append.md`
   (`orchestrator_append.md` is the working example). A full `<agent>.md`
   replacement must restate the entire bundled prompt and is a last resort.
 - **Terminology**: in prose and docs, call the plugin **omos**. Keep the full

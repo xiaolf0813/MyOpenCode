@@ -60,11 +60,17 @@ Everything is generated from one tree, `agents/`:
 agents/
 ├── prompts/          # each agent prompt body, once (omos attribution included)
 ├── prompts_cn/       # Chinese reference translations (never packaged)
-├── backends/         # per-backend frontmatter: claude.json, opencode.json
-└── opencode/         # distributable OpenCode assets
-    ├── AGENTS.md          ├── oh-my-opencode-slim.jsonc
-    ├── opencode.jsonc     ├── oh-my-opencode-slim/<agent>_append.md
-    └── package.json
+└── backends/         # everything backend-specific
+    ├── claude/
+    │   ├── settings.json   # main-thread agent setting
+    │   └── agents.json     # per-agent frontmatter (name/tools/model)
+    └── opencode/
+        ├── agents.json           # per-agent frontmatter (description/mode/tools)
+        ├── AGENTS.md             # discipline rules
+        ├── opencode.jsonc        # core config
+        ├── oh-my-opencode-slim.jsonc       # omos project config
+        ├── oh-my-opencode-slim/  # prompt overrides (<agent>_append.md)
+        └── package.json          # plugin node dependencies
 ```
 
 In your project, `.claude/agents/` and `.opencode/` are assembled from it.
