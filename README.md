@@ -11,43 +11,45 @@ npx my-agents
 project:
 
 - **`.opencode/`** — OpenCode core config, cross-agent discipline rules, and
-  (optionally) the
-  [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)
-  plugin setup (short name: **omos**): eight specialized agents —
+  native `.opencode/agents/` subagents: eight specialized agents —
   `orchestrator`, `explorer`, `librarian`, `oracle`, `designer`, `fixer`,
-  `observer`, `improver` — plus multi-model council presets.
+  `observer`, `improver`. Add the separate `--omos` target on top for the
+  [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)
+  plugin scheme (short name: **omos**): multi-model council presets and
+  prompt overrides.
 - **`.claude/`** — the same specialists as native Claude Code subagents
   (`.claude/agents/*.md`). omos-agnostic: installed identically in every
-  scheme.
+  target.
 - **`~/.zcode/`** — opt-in ZCode support (`--zcode`): user-level global
   instructions plus the specialist subagents as ZCode user agents
   (`~/.zcode/agents/*.md`). Nothing is written inside the project.
 
-## Two OpenCode schemes
+## OpenCode targets: native or omos
 
-| | non-omos (default) | omos (consent required) |
-| --- | --- | --- |
-| `.opencode/agents/*.md` | ✅ native subagents | — (the plugin provides agents) |
-| omos config + prompt overrides | — | ✅ |
-| `"plugin": ["oh-my-opencode-slim"]` in `opencode.jsonc` | — | ✅ pinned |
-| network download / plugin execution | none | on next `opencode` start, via Bun |
+OpenCode support comes as two independent targets:
 
-Consent is asked on interactive terminals (`[Y/n]`); non-interactive runs
-default to the non-omos scheme — nothing is ever downloaded without your
-explicit agreement. The actual download and plugin execution are performed by
-OpenCode itself on the next start, driven solely by the pin you consented to.
+- **`--opencode` (native)** — core config (`opencode.jsonc`, `AGENTS.md`)
+  plus native `.opencode/agents/*.md` subagents. Requires the OpenCode app
+  (`opencode` on PATH). Nothing is downloaded. When a user-level omos
+  install is detected (`~/.config/opencode`), it installs the omos way
+  instead (omits assets, no native agents) to avoid agent conflicts.
+- **`--omos` (opt-in plugin scheme)** — copies only the omos project assets
+  (oh-my-opencode-slim.jsonc, prompt overrides, plugin node dependencies)
+  into `.opencode/`. Requires OpenCode **and** an existing user-level omos
+  install (`~/.config/opencode`): the plugin loads from that user level, so
+  my-agents never pins a `"plugin"` entry and never downloads anything.
+  It cannot be combined with `--opencode`.
 
-If a user-level omos install is detected (`~/.config/opencode`), omos files
-are copied without pinning the plugin entry, to avoid double-loading.
+There is no consent flow: the explicit `--omos` flag is the explicit choice,
+and the prerequisite check fails fast if omos is not already installed.
 
 ## Usage
 
 ```bash
 npx my-agents                    # install both .opencode/ and .claude/
 npx my-agents --opencode         # OpenCode setup only
+npx my-agents --omos             # omos plugin scheme only (no native agents)
 npx my-agents --claude           # Claude Code setup only
-npx my-agents --pin-omos         # enable the omos scheme without asking
-npx my-agents --no-omos          # keep the non-omos scheme
 npx my-agents --force            # overwrite files that already exist
 npx my-agents --dry-run          # preview without writing
 npx my-agents --zcode            # ZCode user-level setup only (~/.zcode)
@@ -88,7 +90,8 @@ agents/
     ├── opencode/
     │   ├── agents.json           # per-agent frontmatter (description/mode/tools)
     │   ├── AGENTS.md             # discipline rules
-    │   ├── opencode.jsonc        # core config
+    │   └── opencode.jsonc        # core config
+    ├── omos/
     │   ├── oh-my-opencode-slim.jsonc       # omos project config
     │   ├── oh-my-opencode-slim/  # prompt overrides (<agent>_append.md)
     │   └── package.json          # plugin node dependencies

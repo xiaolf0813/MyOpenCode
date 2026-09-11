@@ -1,8 +1,9 @@
 # AGENTS.md
 
 This repository ships **my-agents**, an npm CLI that installs a portable
-OpenCode + Claude Code agent setup into a target project. The setup is built
-on the `oh-my-opencode-slim` plugin (short name: **omos**). This file is
+OpenCode + Claude Code agent setup into a target project. OpenCode support
+is split into a native target and an opt-in omos target (the
+`oh-my-opencode-slim` plugin, short name: **omos**). This file is
 auto-loaded from the repo root on every run — keep it structural and lean.
 
 There is no build and no test suite. Validation means:
@@ -18,9 +19,9 @@ parses. CLI behavior changes apply on the next run.
 | `agents/backends/claude/settings.json` | `.claude/settings.json` |
 | `agents/backends/opencode/AGENTS.md` | `.opencode/AGENTS.md` |
 | `agents/backends/opencode/opencode.jsonc` | `.opencode/opencode.jsonc` |
-| `agents/backends/opencode/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
-| `agents/backends/opencode/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
-| `agents/backends/opencode/package.json` | `.opencode/package.json` |
+| `agents/backends/omos/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
+| `agents/backends/omos/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
+| `agents/backends/omos/package.json` | `.opencode/package.json` |
 | `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
 | `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-agents --zcode`; nothing generated inside the repo) |
 
@@ -42,18 +43,22 @@ committed or packaged.
 | `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-agents assemble`. |
 | `package.json` | npm package **`my-agents`**; the `files` whitelist is the tarball contract. |
 
-## Schemes (OpenCode target)
+## OpenCode targets (opencode / omos)
 
-- **Non-omos** (default without consent): core config (`opencode.jsonc`,
-  `AGENTS.md`) plus native `.opencode/agents/*.md` assembled from the
-  omos-derived prompts. Nothing is downloaded.
-- **omos** (`--pin-omos` or interactive consent): omos config + prompt
-  overrides copied and `"plugin": ["oh-my-opencode-slim"]` pinned; OpenCode
-  downloads and executes the plugin from npm on next start. A user-level omos
-  install is detected automatically and then omos files are copied without
-  pinning (avoids double-loading).
+- **opencode** (in the default set; requires an `opencode` binary on PATH):
+  native setup — core config (`opencode.jsonc`, `AGENTS.md`) plus native
+  `.opencode/agents/*.md` assembled from the omos-derived prompts. When a
+  user-level omos install is detected, it switches to the omos way (omits
+  assets, no native agents) to avoid agent conflicts. Nothing is downloaded.
+- **omos** (opt-in `--omos`; requires OpenCode **and** a pre-existing
+  user-level omos install in `~/.config/opencode`): copies only the omos
+  project assets (`oh-my-opencode-slim.jsonc`, prompt overrides,
+  `package.json`) into `.opencode/`. The plugin loads from the user level,
+  so my-agents never pins a `"plugin"` entry and never downloads anything;
+  a missing prerequisite fails fast before any write. Exclusive with
+  `--opencode`.
 
-`.claude/` is omos-agnostic and installed identically in both schemes.
+`.claude/` is omos-agnostic and installed identically in every target.
 
 **ZCode target** (opt-in via `--zcode`/`zcode`, never in the default set):
 user-level only — `~/.zcode/AGENTS.md` composed from
@@ -74,16 +79,18 @@ are skipped unless `--force`.
 - **Behavior rules** → `agents/backends/opencode/AGENTS.md`, one rule per
   concern. Do not duplicate rules between this root file and it.
 - **Model / variant / displayName / council presets** →
-  `agents/backends/opencode/oh-my-opencode-slim.jsonc`. Keep JSONC parseable
+  `agents/backends/omos/oh-my-opencode-slim.jsonc`. Keep JSONC parseable
   (comments and trailing commas allowed).
 - **Prompt tuning** → append-only, via
-  `agents/backends/opencode/oh-my-opencode-slim/<agent>_append.md`
+  `agents/backends/omos/oh-my-opencode-slim/<agent>_append.md`
   (`orchestrator_append.md` is the working example). A full `<agent>.md`
   replacement must restate the entire bundled prompt and is a last resort.
 - **Terminology**: in prose and docs, call the plugin **omos**. Keep the full
   name `oh-my-opencode-slim` in paths and filenames.
-- **Consent**: anything that makes OpenCode download or execute code (the
-  plugin pin) must stay behind explicit user consent. Never widen it silently.
+- **No downloads**: my-agents never pins a `"plugin"` entry and never
+  downloads or executes anything. The omos target only copies project assets
+  and requires a pre-existing user-level omos install; never widen it
+  silently.
 
 ## Target projects
 

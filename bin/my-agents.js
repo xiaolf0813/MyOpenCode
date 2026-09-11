@@ -3,15 +3,15 @@
 // project, plus opt-in user-level ZCode support (~/.zcode).
 // Zero dependencies. Project targets always use the current working directory.
 
+import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { createInterface } from "node:readline/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** npm package providing the omos plugin; auto-installed by OpenCode when listed in "plugin". */
+/** npm package name of the omos plugin; detected at user level (~/.config/opencode) to gate the omos target. */
 const OMOS_PACKAGE = "oh-my-opencode-slim";
 
 /** Entries copied for each target set. Names are copied as-is; dirs are walked recursively. */
@@ -19,10 +19,14 @@ const SETS = {
   opencode: {
     from: join(PKG_ROOT, "agents", "backends", "opencode"),
     dest: ".opencode",
-    /** Always copied: plain OpenCode setup on its default primary agents. */
-    coreEntries: ["AGENTS.md", "opencode.jsonc"],
-    /** Only copied when the user consents to the omos plugin setup. */
-    omosEntries: ["oh-my-opencode-slim.jsonc", "oh-my-opencode-slim", "package.json"],
+    /** Native OpenCode setup: core config; agents are assembled separately. */
+    entries: ["AGENTS.md", "opencode.jsonc"],
+  },
+  omos: {
+    label: ".opencode/  (oh-my-opencode-slim: config, prompt overrides, plugin deps)",
+    from: join(PKG_ROOT, "agents", "backends", "omos"),
+    dest: ".opencode",
+    entries: ["oh-my-opencode-slim.jsonc", "oh-my-opencode-slim", "package.json"],
   },
   claude: {
     label: ".claude/  (agents/*.md, settings.json)",
@@ -64,8 +68,12 @@ Commands
                           agents/ single-source prompts (--check verifies only)
 
 Targets (default: both)
-  --opencode              set up .opencode/ (core config, omos-optional)
+  --opencode              set up .opencode/ (core config + native agents)
   --claude                set up .claude/ (Claude Code agents + shared settings)
+  --omos                  add the omos plugin scheme to .opencode/
+                          (requires OpenCode + a user-level omos install;
+                          plugin loads from user level — nothing is pinned;
+                          exclusive with --opencode)
 
 ZCode target (opt-in only; user-level, writes to your home directory)
   --zcode                 install ~/.zcode/AGENTS.md + ~/.zcode/agents/*.md
@@ -74,8 +82,6 @@ ZCode target (opt-in only; user-level, writes to your home directory)
 Options
   --force                 overwrite files that already exist (default: skip them)
   --dry-run               print what would be copied without writing anything
-  --pin-omos              enable the omos scheme without asking
-  --no-omos               keep the non-omos scheme
   -h, --help              show this help
 
 Notes
@@ -85,16 +91,17 @@ Notes
   agents.json. This repository's .claude/agents/ and .opencode/ are
   generated from it — edit agents/ and run "my-agents assemble".
 
-  OpenCode target has two schemes. The non-omos scheme (default without
-  consent) copies only the core config (opencode.jsonc, AGENTS.md) plus
-  native .opencode/agents/ subagents assembled from the omos-derived
-  prompts — OpenCode downloads and executes nothing. The omos scheme
-  (--pin-omos, or an interactive yes) instead copies the omos config and
-  prompt overrides and pins "plugin": ["${OMOS_PACKAGE}"] so OpenCode
-  downloads and executes the plugin from npm on next start. Consent is
-  asked on interactive terminals; non-interactive runs default to the
-  non-omos scheme. When a user-level omos install is already detected,
-  omos files are copied without pinning the plugin entry.
+  OpenCode support is split into two targets. --opencode is the native
+  setup: core config (opencode.jsonc, AGENTS.md) plus native
+  .opencode/agents/ subagents assembled from the omos-derived prompts.
+  When a user-level omos install is detected, --opencode installs the
+  omos way instead — omos config + prompt overrides, no native agents —
+  to avoid conflicting with omos-provided agents. --omos is a separate
+  opt-in backend that copies the omos project assets
+  (oh-my-opencode-slim.jsonc, prompt overrides, package.json) into
+  .opencode/; it requires OpenCode plus an existing user-level omos
+  install (~/.config/opencode). The plugin loads from that user level, so
+  my-agents never pins a "plugin" entry and never downloads anything.
 
   ZCode target (--zcode or "zcode") is never part of the default set. It
   composes the global ~/.zcode/AGENTS.md from agents/backends/zcode/AGENTS.md
@@ -105,6 +112,7 @@ Notes
 Examples
   npx my-agents                    # copy both .opencode/ and .claude/
   npx my-agents --opencode         # OpenCode setup only
+  npx my-agents --omos             # omos plugin scheme only (no native agents)
   npx my-agents claude --force     # positional target form, overwrite existing files
   npx my-agents --zcode            # ZCode user-level setup only (~/.zcode)
 `;
@@ -123,13 +131,16 @@ function parseArgs(argv) {
   const targets = new Set();
   let force = false;
   let dryRun = false;
-  let pinOmos; // undefined = ask / decide by context, true = --pin-omos, false = --no-omos
 
   for (const arg of argv) {
     switch (arg) {
       case "--opencode":
       case "opencode":
         targets.add("opencode");
+        break;
+      case "--omos":
+      case "omos":
+        targets.add("omos");
         break;
       case "--claude":
       case "claude":
@@ -145,12 +156,6 @@ function parseArgs(argv) {
       case "--dry-run":
         dryRun = true;
         break;
-      case "--pin-omos":
-        pinOmos = true;
-        break;
-      case "--no-omos":
-        pinOmos = false;
-        break;
       case "-h":
       case "--help":
         return { help: true };
@@ -159,11 +164,15 @@ function parseArgs(argv) {
     }
   }
 
+  if (targets.has("opencode") && targets.has("omos")) {
+    throw new Error(`--omos cannot be combined with --opencode; --opencode already installs the omos way when a user-level omos install is detected\n\n${HELP}`);
+  }
+
   if (targets.size === 0) {
     targets.add("opencode");
     targets.add("claude");
   }
-  return { targets, force, dryRun, pinOmos };
+  return { targets, force, dryRun };
 }
 
 function walk(root, dir, onFile) {
@@ -224,7 +233,7 @@ function copyEntries(set, entries, targetRoot, opts, counts) {
   for (const entry of entries) {
     const src = join(set.from, entry);
     if (!existsSync(src)) {
-      console.warn(`warn: missing entry '${entry}' in ${key} source, skipped`);
+      console.warn(`warn: missing entry '${entry}' in ${set.dest} source, skipped`);
       continue;
     }
     if (statSync(src).isDirectory()) {
@@ -248,41 +257,10 @@ function omosUserLevelPresent() {
   return false;
 }
 
-/**
- * Insert `"plugin": ["oh-my-opencode-slim"]` before the final closing brace of a
- * JSONC config text. Returns null when a "plugin" key already exists or the text
- * has no recognizable closing brace.
- */
-function injectPluginEntry(text) {
-  if (/(^|[^\w])"plugin"\s*:/.test(text)) return null;
-  const end = text.lastIndexOf("}");
-  if (end === -1) return null;
-  const before = text.slice(0, end).replace(/\s+$/, "");
-  const sep = /,$/.test(before) ? "" : ",";
-  return `${before}${sep}\n  "plugin": ["${OMOS_PACKAGE}"]\n${text.slice(end)}`;
-}
-
-/**
- * Ask for consent on an interactive terminal. Returns null when no terminal
- * is attached (caller decides the non-interactive fallback), true on yes,
- * false on no or on stdin closing without a real answer.
- */
-async function askConsent(question) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) return null;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = await Promise.race([
-      rl.question(question),
-      new Promise((res) => rl.once("close", () => res(null))),
-    ]);
-    if (answer === null) return false;
-    const normalized = String(answer).trim().toLowerCase();
-    return normalized === "" || normalized === "y" || normalized === "yes";
-  } catch {
-    return false;
-  } finally {
-    rl.close();
-  }
+/** True when the OpenCode app is installed (an `opencode` binary on PATH). */
+function opencodeInstalled() {
+  const result = spawnSync("opencode", ["--version"], { stdio: "ignore" });
+  return !(result.error && result.error.code === "ENOENT");
 }
 
 /**
@@ -359,62 +337,30 @@ function assembleBackend(name, outDir, opts, counts, usedSlots) {
   if (usedSlots === undefined) warnUnusedSlots(name, slots);
 }
 
-/**
- * Decide the OpenCode scheme. The non-omos scheme keeps OpenCode on its
- * default primary agents: core config plus native `.opencode/agents/` files
- * converted from the omos-derived prompts. The omos scheme adds the omos
- * config and prompt overrides and pins the plugin so OpenCode downloads
- * and executes it from npm on next start — consent only.
- */
-async function resolveOmos(opts) {
-  if (opts.pinOmos === true) return { enabled: true, pin: true };
-  if (opts.pinOmos === false) return { enabled: false, reason: "--no-omos" };
-  if (omosUserLevelPresent()) return { enabled: true, pin: false, detected: true };
-  const consent = await askConsent(
-    `\n? Enable the omos setup (config + prompt overrides + "plugin": ["${OMOS_PACKAGE}"]) in .opencode/?\n` +
-      `  OpenCode will download and execute the plugin from npm on next start.\n` +
-      `  Declining keeps OpenCode on its default agents. [Y/n] `,
-  );
-  if (consent === null) return { enabled: false, reason: "non-interactive" };
-  return consent ? { enabled: true, pin: true } : { enabled: false, reason: "declined" };
-}
-
-function pinOmosPlugin(targetRoot, { dryRun }) {
-  const file = join(targetRoot, ".opencode", "opencode.jsonc");
-  if (!existsSync(file)) return;
-  const text = readFileSync(file, "utf8");
-  const next = injectPluginEntry(text);
-  if (next === null) return; // config already declares a "plugin" entry
-  if (!dryRun) writeFileSync(file, next);
-  console.log(`  pin        .opencode/opencode.jsonc  ("plugin": ["${OMOS_PACKAGE}"])${dryRun ? "  (dry-run)" : ""}`);
-}
-
-async function applyOpencode(targetRoot, opts, counts) {
+/** Native OpenCode target: core config plus native .opencode/agents/ subagents.
+ *  When a user-level omos install is detected, installs the omos way instead —
+ *  native agents would conflict with omos-provided agents. */
+function applyOpencode(targetRoot, opts, counts) {
   const set = SETS.opencode;
   console.log(`\n.opencode/  (opencode.jsonc, AGENTS.md)`);
-  copyEntries(set, set.coreEntries, targetRoot, opts, counts);
-
-  const decision = await resolveOmos(opts);
-  if (!decision.enabled) {
-    console.log(`  agents     .opencode/agents/  (native OpenCode agents, omos prompts attributed)`);
-    assembleBackend("opencode", join(targetRoot, ".opencode", "agents"), opts, counts);
-    const hint =
-      decision.reason === "--no-omos"
-        ? "  (--no-omos; rerun with --pin-omos to enable omos)"
-        : decision.reason === "non-interactive"
-          ? "  (non-interactive; rerun with --pin-omos to enable omos)"
-          : "  (rerun with --pin-omos to enable omos)";
-    console.log(`  note       non-omos scheme: OpenCode primary agents + native .opencode/agents/ subagents${hint}`);
+  copyEntries(set, set.entries, targetRoot, opts, counts);
+  if (omosUserLevelPresent()) {
+    console.log(`  note       user-level omos install detected; installing the omos way: omos config + prompt overrides copied, native .opencode/agents/ skipped to avoid agent conflicts (the plugin loads from user level)`);
+    copyEntries(SETS.omos, SETS.omos.entries, targetRoot, opts, counts);
     return;
   }
+  console.log(`  agents     .opencode/agents/  (native OpenCode agents, omos prompts attributed)`);
+  assembleBackend("opencode", join(targetRoot, ".opencode", "agents"), opts, counts);
+}
+
+/** omos target: copy the omos project assets; the plugin itself loads from the
+ *  user-level omos install enforced by the prerequisite gate — nothing is
+ *  pinned and nothing is downloaded. */
+function applyOmos(targetRoot, opts, counts) {
+  console.log(`\n${SETS.omos.label}`);
+  copyEntries(SETS.omos, SETS.omos.entries, targetRoot, opts, counts);
   if (existsSync(join(targetRoot, ".opencode", "agents"))) {
     console.log(`  note       existing .opencode/agents/ files may conflict with omos-provided agents; review them`);
-  }
-  console.log(`  omos       oh-my-opencode-slim.jsonc, oh-my-opencode-slim/ prompt overrides, package.json`);
-  copyEntries(set, set.omosEntries, targetRoot, opts, counts);
-  if (decision.pin) pinOmosPlugin(targetRoot, opts);
-  else if (decision.detected) {
-    console.log(`  note       user-level omos install detected; omos config copied without pinning the plugin entry`);
   }
 }
 
@@ -450,38 +396,41 @@ function applyZcode(opts, counts) {
 }
 
 /**
- * Sync the distributable OpenCode assets from agents/backends/opencode/ into this
- * repository's live .opencode/ directory. In check mode, only reports drift.
+ * Sync the distributable OpenCode assets from agents/backends/{opencode,omos}/
+ * into this repository's live .opencode/ directory (this repo self-hosts omos).
+ * In check mode, only reports drift.
  */
 function syncOpencodeAssets({ check }) {
-  const srcRoot = join(PKG_ROOT, "agents", "backends", "opencode");
   const destRoot = join(PKG_ROOT, ".opencode");
   let drifted = 0;
 
-  walk(srcRoot, srcRoot, (fileAbs) => {
-    const rel = relative(srcRoot, fileAbs);
-    if (rel === "agents.json") return; // assembly metadata, not a target asset
-    if (rel.startsWith("slots/")) return; // {{slot:...}} texts, not runtime assets
-    const dest = join(destRoot, rel);
-    const content = readFileSync(fileAbs, "utf8");
-    const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;
-    if (current === content) return;
-    drifted++;
-    if (!check) {
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, content);
-      console.log(`synced: .opencode/${rel}`);
-    } else {
-      console.log(`outdated: .opencode/${rel}`);
-    }
-  });
+  for (const backendName of ["opencode", "omos"]) {
+    const srcRoot = join(PKG_ROOT, "agents", "backends", backendName);
+    walk(srcRoot, srcRoot, (fileAbs) => {
+      const rel = relative(srcRoot, fileAbs);
+      if (rel === "agents.json") return; // assembly metadata, not a target asset
+      if (rel.startsWith("slots/")) return; // {{slot:...}} texts, not runtime assets
+      const dest = join(destRoot, rel);
+      const content = readFileSync(fileAbs, "utf8");
+      const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;
+      if (current === content) return;
+      drifted++;
+      if (!check) {
+        mkdirSync(dirname(dest), { recursive: true });
+        writeFileSync(dest, content);
+        console.log(`synced: .opencode/${rel}`);
+      } else {
+        console.log(`outdated: .opencode/${rel}`);
+      }
+    });
+  }
   return drifted;
 }
 
 /**
  * `my-agents assemble`: regenerate this repository's generated config from
  * the single-source agents/ tree: `.claude/agents/` (claude backend) and
- * `.opencode/` (OpenCode assets). `--check` only verifies.
+ * `.opencode/` (opencode + omos backend assets). `--check` only verifies.
  */
 function assembleCommand({ check }) {
   const outDir = join(PKG_ROOT, BACKENDS.claude);
@@ -534,10 +483,27 @@ async function main() {
     return;
   }
 
+  // Prerequisite gate: fail fast with no writes. --omos demands an existing
+  // user-level omos install because the plugin loads from there — my-agents
+  // never pins a plugin entry and never downloads anything.
+  const prereqFailures = [];
+  if (opts.targets.has("opencode") && !opencodeInstalled()) {
+    prereqFailures.push("OpenCode is not installed (no 'opencode' on PATH); install OpenCode first");
+  }
+  if (opts.targets.has("omos")) {
+    if (!opencodeInstalled()) prereqFailures.push("OpenCode is not installed (no 'opencode' on PATH); install OpenCode first");
+    if (!omosUserLevelPresent()) prereqFailures.push("omos is not installed at user level (~/.config/opencode); install omos first, then rerun with --omos");
+  }
+  if (prereqFailures.length > 0) {
+    for (const failure of prereqFailures) console.error(`error: ${failure}`);
+    process.exitCode = 1;
+    return;
+  }
+
   const targetRoot = process.cwd();
   // The source-repo guard blocks project targets only; --zcode (user level)
   // is safe to run from anywhere, including the source repository itself.
-  const projectTargets = opts.targets.has("opencode") || opts.targets.has("claude");
+  const projectTargets = opts.targets.has("opencode") || opts.targets.has("omos") || opts.targets.has("claude");
   if (projectTargets && resolve(targetRoot) === PKG_ROOT) {
     console.log("current directory is the my-agents source repository; nothing to copy. Use \"my-agents assemble\" to regenerate .claude/agents/ from agents/ source.");
     return;
@@ -551,7 +517,8 @@ async function main() {
       : `my-agents: installing agent setup into ${targetRoot}${opts.dryRun ? "  (dry-run)" : ""}`,
   );
 
-  if (opts.targets.has("opencode")) await applyOpencode(targetRoot, opts, counts);
+  if (opts.targets.has("opencode")) applyOpencode(targetRoot, opts, counts);
+  if (opts.targets.has("omos")) applyOmos(targetRoot, opts, counts); // after opencode so core config exists first
   if (opts.targets.has("claude")) {
     console.log(`\n${SETS.claude.label}`);
     copyEntries(SETS.claude, SETS.claude.entries, targetRoot, opts, counts);
