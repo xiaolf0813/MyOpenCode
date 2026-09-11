@@ -21,7 +21,8 @@ parses. CLI behavior changes apply on the next run.
 | `agents/backends/opencode/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
 | `agents/backends/opencode/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
 | `agents/backends/opencode/package.json` | `.opencode/package.json` |
-| `agents/prompts/*.md` + `agents/backends/*/agents.json` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
+| `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
+| `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-agents --zcode`; nothing generated inside the repo) |
 
 After editing any source, run `npx my-agents assemble` in the repo root
 (`--check` verifies without writing). The generated `.claude/` and
@@ -54,10 +55,22 @@ committed or packaged.
 
 `.claude/` is omos-agnostic and installed identically in both schemes.
 
+**ZCode target** (opt-in via `--zcode`/`zcode`, never in the default set):
+user-level only — `~/.zcode/AGENTS.md` composed from
+`agents/backends/zcode/AGENTS.md` (header) + `agents/prompts/orchestrator.md`
+(body), plus subagents assembled into `~/.zcode/agents/`. No omos, no
+downloads, nothing written inside the repo or the project; existing files
+are skipped unless `--force`.
+
 ## Editing conventions
 
-- **Agent prompts / roster** → edit `agents/prompts/*.md`; keep per-backend
-  frontmatter in `agents/backends/*.json` in sync; then assemble.
+- **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change,
+  update the corresponding `agents/prompts_cn/<agent>_cn.md`; keep per-backend
+  frontmatter in `agents/backends/*/agents.json` in sync; then assemble.
+- **Backend-specific text** → `{{slot:<name>}}` placeholders in
+  `agents/prompts/*.md`; per-backend content in
+  `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt
+  must exist for every backend or assembly fails.
 - **Behavior rules** → `agents/backends/opencode/AGENTS.md`, one rule per
   concern. Do not duplicate rules between this root file and it.
 - **Model / variant / displayName / council presets** →
