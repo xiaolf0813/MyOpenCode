@@ -52,7 +52,9 @@ committed or packaged.
 - **omos** (opt-in `--omos`; requires OpenCode **and** a pre-existing
   user-level omos install in `~/.config/opencode`): copies only the omos
   project assets (`oh-my-opencode-slim.jsonc`, prompt overrides,
-  `package.json`) into `.opencode/`. The plugin loads from the user level,
+  `package.json`) into `.opencode/`; the `orchestrator_append.md` override
+  carries the universal Disciplines (the omos orchestrator prompt is
+  plugin-provided). The plugin loads from the user level,
   so my-agents never pins a `"plugin"` entry and never downloads anything;
   a missing prerequisite fails fast before any write. Exclusive with
   `--opencode`.
