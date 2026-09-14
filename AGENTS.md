@@ -1,7 +1,8 @@
 # AGENTS.md
 
 This repository ships **my-agents**, an npm CLI that installs a portable
-OpenCode + Claude Code agent setup into a target project. OpenCode support
+OpenCode + Claude Code agent setup into a target project (or, with `--user`,
+at user level: `~/.config/opencode/` + `~/.claude/`). OpenCode support
 is split into a native target and an opt-in omos target (the
 `oh-my-opencode-slim` plugin, short name: **omos**). This file is
 auto-loaded from the repo root on every run — keep it structural and lean.

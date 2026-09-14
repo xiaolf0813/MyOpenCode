@@ -1,7 +1,8 @@
 # my-agents
 
 Portable [OpenCode](https://opencode.ai) + Claude Code + ZCode agent setup,
-installed into your project (or, for ZCode, your user level) with one command.
+installed into your project (or at user level with `--user`; ZCode is always
+user-level) with one command.
 
 ```bash
 npx my-agents
@@ -52,6 +53,7 @@ npx my-agents                    # install both .opencode/ and .claude/
 npx my-agents --opencode         # OpenCode setup only
 npx my-agents --omos             # omos plugin scheme only (no native agents)
 npx my-agents --claude           # Claude Code setup only
+npx my-agents --user             # user-level install: ~/.config/opencode/ + ~/.claude/
 npx my-agents --force            # overwrite files that already exist
 npx my-agents --dry-run          # preview without writing
 npx my-agents --zcode            # ZCode user-level setup only (~/.zcode)
@@ -59,6 +61,16 @@ npx my-agents assemble [--check] # in this repo: regenerate .claude/agents/ and 
 ```
 
 Existing files are skipped unless `--force` is given, so re-running is safe.
+
+## User-level install
+
+`npx my-agents --user` installs the same assets at user level instead of the
+current project: OpenCode/omos assets go to `~/.config/opencode/` (its XDG
+config directory; global agents are read from `~/.config/opencode/agents/`)
+and Claude Code assets to `~/.claude/` (`settings.json` + `agents/*.md`).
+User-level files apply to every project and are not meant for version
+control; on name conflicts project-level agents win over user-level ones.
+ZCode is always user-level and ignores `--user`.
 
 ## ZCode target
 

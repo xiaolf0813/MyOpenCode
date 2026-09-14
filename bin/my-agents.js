@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // my-agents CLI — copy the OpenCode / Claude Code agent setup into the current
-// project, plus opt-in user-level ZCode support (~/.zcode).
-// Zero dependencies. Project targets always use the current working directory.
+// project (or, with --user, into the tools' user-level config roots), plus
+// opt-in user-level ZCode support (~/.zcode).
+// Zero dependencies. Project targets use the current working directory;
+// user-level targets always use the home directory.
 
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -29,7 +31,6 @@ const SETS = {
     entries: ["oh-my-opencode-slim.jsonc", "oh-my-opencode-slim", "package.json"],
   },
   claude: {
-    label: ".claude/  (agents/*.md, settings.json)",
     from: join(PKG_ROOT, "agents", "backends", "claude"),
     dest: ".claude",
     /** Agent markdown files are assembled from agents/ source, not copied. */
@@ -57,7 +58,7 @@ function isSkipped(name) {
 const SLOT_RE = /\{\{slot:([\w-]+)\}\}/g;
 
 const HELP = `my-agents — scaffold the OpenCode / Claude Code agent setup into the current
-project, plus opt-in user-level ZCode support
+project (or at user level with --user), plus opt-in user-level ZCode support
 
 Usage
   npx my-agents [targets...] [options]
@@ -80,6 +81,10 @@ ZCode target (opt-in only; user-level, writes to your home directory)
                           (takes effect in new ZCode sessions)
 
 Options
+  --user                  install at user level instead of the current project:
+                          opencode/omos assets go to ~/.config/opencode/,
+                          Claude Code assets to ~/.claude/ (ZCode is always
+                          user-level and ignores this flag)
   --force                 overwrite files that already exist (default: skip them)
   --dry-run               print what would be copied without writing anything
   -h, --help              show this help
@@ -114,6 +119,7 @@ Examples
   npx my-agents --opencode         # OpenCode setup only
   npx my-agents --omos             # omos plugin scheme only (no native agents)
   npx my-agents claude --force     # positional target form, overwrite existing files
+  npx my-agents --user             # user-level: ~/.config/opencode/ + ~/.claude/
   npx my-agents --zcode            # ZCode user-level setup only (~/.zcode)
 `;
 
@@ -131,6 +137,7 @@ function parseArgs(argv) {
   const targets = new Set();
   let force = false;
   let dryRun = false;
+  let user = false;
 
   for (const arg of argv) {
     switch (arg) {
@@ -149,6 +156,9 @@ function parseArgs(argv) {
       case "--zcode":
       case "zcode":
         targets.add("zcode");
+        break;
+      case "--user":
+        user = true;
         break;
       case "--force":
         force = true;
@@ -172,7 +182,7 @@ function parseArgs(argv) {
     targets.add("opencode");
     targets.add("claude");
   }
-  return { targets, force, dryRun };
+  return { targets, force, dryRun, user };
 }
 
 function walk(root, dir, onFile) {
@@ -184,8 +194,13 @@ function walk(root, dir, onFile) {
   }
 }
 
-function copyOne(src, dest, { force, dryRun }, counts) {
-  const rel = relative(process.cwd(), dest);
+/**
+ * Copy one file with skip/force/dry-run semantics. displayRoot/displayPrefix
+ * only control how the destination is displayed (user-level installs pass the
+ * home directory and "~/"); defaults keep the project-relative display.
+ */
+function copyOne(src, dest, { force, dryRun, displayRoot = process.cwd(), displayPrefix = "" }, counts) {
+  const rel = displayPrefix + relative(displayRoot, dest);
   const exists = existsSync(dest);
 
   if (exists && !force) {
@@ -224,7 +239,12 @@ function writeAgent(dest, content, { force, dryRun, displayRoot = process.cwd(),
   console.log(`  ${exists ? "overwrite" : "create   "}  ${rel}${dryRun ? "  (dry-run)" : ""}`);
 }
 
-function copyEntries(set, entries, targetRoot, opts, counts) {
+/**
+ * Copy a set's entries under targetRoot/dest. dest is the scope's destination
+ * subdirectory: ".opencode"/".claude" at project level, "" at user level
+ * (files land directly in the user-level config root).
+ */
+function copyEntries(set, entries, targetRoot, dest, opts, counts) {
   if (!existsSync(set.from)) {
     console.warn(`warn: source directory for '${set.dest}' is missing in this installation, skipped`);
     return;
@@ -238,10 +258,10 @@ function copyEntries(set, entries, targetRoot, opts, counts) {
     }
     if (statSync(src).isDirectory()) {
       walk(src, src, (fileAbs) =>
-        copyOne(fileAbs, join(targetRoot, set.dest, entry, relative(src, fileAbs)), opts, counts),
+        copyOne(fileAbs, join(targetRoot, dest, entry, relative(src, fileAbs)), opts, counts),
       );
     } else {
-      copyOne(src, join(targetRoot, set.dest, entry), opts, counts);
+      copyOne(src, join(targetRoot, dest, entry), opts, counts);
     }
   }
 }
@@ -337,30 +357,31 @@ function assembleBackend(name, outDir, opts, counts, usedSlots) {
   if (usedSlots === undefined) warnUnusedSlots(name, slots);
 }
 
-/** Native OpenCode target: core config plus native .opencode/agents/ subagents.
- *  When a user-level omos install is detected, installs the omos way instead —
- *  native agents would conflict with omos-provided agents. */
-function applyOpencode(targetRoot, opts, counts) {
+/** Native OpenCode target: core config plus native agents/ subagents. When a
+ *  user-level omos install is detected, installs the omos way instead —
+ *  native agents would conflict with omos-provided agents. scope = {root,
+ *  dest, display} from the per-target scope resolution in main(). */
+function applyOpencode(scope, opts, counts) {
   const set = SETS.opencode;
-  console.log(`\n.opencode/  (opencode.jsonc)`);
-  copyEntries(set, set.entries, targetRoot, opts, counts);
+  console.log(`\n${scope.display}  (opencode.jsonc)`);
+  copyEntries(set, set.entries, scope.root, scope.dest, opts, counts);
   if (omosUserLevelPresent()) {
-    console.log(`  note       user-level omos install detected; installing the omos way: omos config + prompt overrides copied, native .opencode/agents/ skipped to avoid agent conflicts (the plugin loads from user level)`);
-    copyEntries(SETS.omos, SETS.omos.entries, targetRoot, opts, counts);
+    console.log(`  note       user-level omos install detected; installing the omos way: omos config + prompt overrides copied, native agents/ skipped to avoid agent conflicts (the plugin loads from user level)`);
+    copyEntries(SETS.omos, SETS.omos.entries, scope.root, scope.dest, opts, counts);
     return;
   }
-  console.log(`  agents     .opencode/agents/  (native OpenCode agents, omos prompts attributed)`);
-  assembleBackend("opencode", join(targetRoot, ".opencode", "agents"), opts, counts);
+  console.log(`  agents     ${scope.display}agents/  (native OpenCode agents, omos prompts attributed)`);
+  assembleBackend("opencode", join(scope.root, scope.dest, "agents"), opts, counts);
 }
 
 /** omos target: copy the omos project assets; the plugin itself loads from the
  *  user-level omos install enforced by the prerequisite gate — nothing is
  *  pinned and nothing is downloaded. */
-function applyOmos(targetRoot, opts, counts) {
+function applyOmos(scope, opts, counts) {
   console.log(`\n${SETS.omos.label}`);
-  copyEntries(SETS.omos, SETS.omos.entries, targetRoot, opts, counts);
-  if (existsSync(join(targetRoot, ".opencode", "agents"))) {
-    console.log(`  note       existing .opencode/agents/ files may conflict with omos-provided agents; review them`);
+  copyEntries(SETS.omos, SETS.omos.entries, scope.root, scope.dest, opts, counts);
+  if (existsSync(join(scope.root, scope.dest, "agents"))) {
+    console.log(`  note       existing ${scope.display}agents/ files may conflict with omos-provided agents; review them`);
   }
 }
 
@@ -501,34 +522,61 @@ async function main() {
   }
 
   const targetRoot = process.cwd();
-  // The source-repo guard blocks project targets only; --zcode (user level)
-  // is safe to run from anywhere, including the source repository itself.
-  const projectTargets = opts.targets.has("opencode") || opts.targets.has("omos") || opts.targets.has("claude");
-  if (projectTargets && resolve(targetRoot) === PKG_ROOT) {
+  // The source-repo guard blocks project-level targets only; --user and
+  // --zcode (user level) are safe to run from anywhere, including the source
+  // repository itself.
+  const touchesProjectTargets = opts.targets.has("opencode") || opts.targets.has("omos") || opts.targets.has("claude");
+  if (!opts.user && touchesProjectTargets && resolve(targetRoot) === PKG_ROOT) {
     console.log("current directory is the my-agents source repository; nothing to copy. Use \"my-agents assemble\" to regenerate .claude/agents/ from agents/ source.");
     return;
   }
 
+  // Per-target install scope. Project level (default) nests under the current
+  // directory; --user installs into each tool's user-level config root instead
+  // (OpenCode reads ~/.config/opencode, Claude Code reads ~/.claude). ZCode is
+  // always user-level and ignores --user.
+  const projectScope = (dest) => ({ root: targetRoot, dest, display: `${dest}/` });
+  const scopes = {
+    opencode: projectScope(".opencode"),
+    omos: projectScope(".opencode"),
+    claude: projectScope(".claude"),
+  };
+  if (opts.user) {
+    const userScope = (root, display) => ({ root, dest: "", display });
+    scopes.opencode = userScope(join(homedir(), ".config", "opencode"), "~/.config/opencode/");
+    scopes.omos = scopes.opencode;
+    scopes.claude = userScope(join(homedir(), ".claude"), "~/.claude/");
+  }
+  // User-level destinations live outside the CWD; display them relative to home.
+  const displayOpts = opts.user ? { ...opts, displayRoot: homedir(), displayPrefix: "~/" } : opts;
+
   const counts = { created: 0, overwritten: 0, skipped: 0 };
   const zcodeOnly = opts.targets.size === 1 && opts.targets.has("zcode");
+  const dry = opts.dryRun ? "  (dry-run)" : "";
   console.log(
     zcodeOnly
-      ? `my-agents: installing ZCode agent setup into ~/.zcode (user-level)${opts.dryRun ? "  (dry-run)" : ""}`
-      : `my-agents: installing agent setup into ${targetRoot}${opts.dryRun ? "  (dry-run)" : ""}`,
+      ? `my-agents: installing ZCode agent setup into ~/.zcode (user-level)${dry}`
+      : opts.user
+        ? `my-agents: installing agent setup at user level (~/.config/opencode, ~/.claude)${dry}`
+        : `my-agents: installing agent setup into ${targetRoot}${dry}`,
   );
 
-  if (opts.targets.has("opencode")) applyOpencode(targetRoot, opts, counts);
-  if (opts.targets.has("omos")) applyOmos(targetRoot, opts, counts); // after opencode so core config exists first
+  if (opts.targets.has("opencode")) applyOpencode(scopes.opencode, displayOpts, counts);
+  if (opts.targets.has("omos")) applyOmos(scopes.omos, displayOpts, counts); // after opencode so core config exists first
   if (opts.targets.has("claude")) {
-    console.log(`\n${SETS.claude.label}`);
-    copyEntries(SETS.claude, SETS.claude.entries, targetRoot, opts, counts);
-    assembleBackend("claude", join(targetRoot, ".claude", "agents"), opts, counts);
+    console.log(`\n${scopes.claude.display}  (agents/*.md, settings.json)`);
+    copyEntries(SETS.claude, SETS.claude.entries, scopes.claude.root, scopes.claude.dest, displayOpts, counts);
+    assembleBackend("claude", join(scopes.claude.root, scopes.claude.dest, "agents"), displayOpts, counts);
   }
   if (opts.targets.has("zcode")) applyZcode(opts, counts);
 
   console.log(`\ndone: ${counts.created} created, ${counts.overwritten} overwritten, ${counts.skipped} skipped.`);
   if (counts.created > 0 && !opts.dryRun) {
-    console.log("next: restart OpenCode / Claude Code / ZCode so the new config is picked up, then commit the copied files.");
+    console.log(
+      opts.user
+        ? "next: restart OpenCode / Claude Code so the user-level config is picked up."
+        : "next: restart OpenCode / Claude Code / ZCode so the new config is picked up, then commit the copied files.",
+    );
   }
 }
 
