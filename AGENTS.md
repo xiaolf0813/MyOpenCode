@@ -17,7 +17,6 @@ parses. CLI behavior changes apply on the next run.
 | Source (edit here) | Generated (do not hand-edit) |
 | --- | --- |
 | `agents/backends/claude/settings.json` | `.claude/settings.json` |
-| `agents/backends/opencode/AGENTS.md` | `.opencode/AGENTS.md` |
 | `agents/backends/opencode/opencode.jsonc` | `.opencode/opencode.jsonc` |
 | `agents/backends/omos/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
 | `agents/backends/omos/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
@@ -46,7 +45,7 @@ committed or packaged.
 ## OpenCode targets (opencode / omos)
 
 - **opencode** (in the default set; requires an `opencode` binary on PATH):
-  native setup — core config (`opencode.jsonc`, `AGENTS.md`) plus native
+  native setup — core config (`opencode.jsonc`) plus native
   `.opencode/agents/*.md` assembled from the omos-derived prompts. When a
   user-level omos install is detected, it switches to the omos way (omits
   assets, no native agents) to avoid agent conflicts. Nothing is downloaded.
@@ -76,8 +75,10 @@ are skipped unless `--force`.
   `agents/prompts/*.md`; per-backend content in
   `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt
   must exist for every backend or assembly fails.
-- **Behavior rules** → `agents/backends/opencode/AGENTS.md`, one rule per
-  concern. Do not duplicate rules between this root file and it.
+- **Universal behavior rules** → the "Disciplines" section (Fact/Security/
+  Language Discipline and future additions) in `agents/prompts/orchestrator.md`; the
+  orchestrator copies it verbatim to the top of every delegation brief. One
+  rule per concern.
 - **Model / variant / displayName / council presets** →
   `agents/backends/omos/oh-my-opencode-slim.jsonc`. Keep JSONC parseable
   (comments and trailing commas allowed).

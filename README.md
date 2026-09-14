@@ -10,8 +10,8 @@ npx my-agents
 `my-agents` copies a curated multi-agent configuration into the current
 project:
 
-- **`.opencode/`** — OpenCode core config, cross-agent discipline rules, and
-  native `.opencode/agents/` subagents: eight specialized agents —
+- **`.opencode/`** — OpenCode core config and native `.opencode/agents/`
+  subagents: eight specialized agents —
   `orchestrator`, `explorer`, `librarian`, `oracle`, `designer`, `fixer`,
   `observer`, `improver`. Add the separate `--omos` target on top for the
   [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)
@@ -28,9 +28,11 @@ project:
 
 OpenCode support comes as two independent targets:
 
-- **`--opencode` (native)** — core config (`opencode.jsonc`, `AGENTS.md`)
+- **`--opencode` (native)** — core config (`opencode.jsonc`)
   plus native `.opencode/agents/*.md` subagents. Requires the OpenCode app
-  (`opencode` on PATH). Nothing is downloaded. When a user-level omos
+  (`opencode` on PATH). Nothing is downloaded. Universal behavior rules (the
+  "Disciplines" section) live inside the orchestrator prompt and are copied
+  verbatim to the top of every delegation brief. When a user-level omos
   install is detected (`~/.config/opencode`), it installs the omos way
   instead (omits assets, no native agents) to avoid agent conflicts.
 - **`--omos` (opt-in plugin scheme)** — copies only the omos project assets
@@ -89,7 +91,6 @@ agents/
     │   └── agents.json     # per-agent frontmatter (name/tools/model)
     ├── opencode/
     │   ├── agents.json           # per-agent frontmatter (description/mode/tools)
-    │   ├── AGENTS.md             # discipline rules
     │   └── opencode.jsonc        # core config
     ├── omos/
     │   ├── oh-my-opencode-slim.jsonc       # omos project config
@@ -98,7 +99,7 @@ agents/
     └── zcode/
         ├── AGENTS.md       # global-file header, composed with prompts/orchestrator.md
         ├── agents.json     # per-agent frontmatter fields (description/model/injectAgentsMd)
-        └── slots/          # dispatch.md, fix_targets.md (every backend has these; not enumerated here)
+        └── slots/          # dispatch.md (every backend has it; not enumerated here)
 ```
 
 In your project, `.claude/agents/` and `.opencode/` are assembled from it.

@@ -20,7 +20,7 @@ const SETS = {
     from: join(PKG_ROOT, "agents", "backends", "opencode"),
     dest: ".opencode",
     /** Native OpenCode setup: core config; agents are assembled separately. */
-    entries: ["AGENTS.md", "opencode.jsonc"],
+    entries: ["opencode.jsonc"],
   },
   omos: {
     label: ".opencode/  (oh-my-opencode-slim: config, prompt overrides, plugin deps)",
@@ -92,7 +92,7 @@ Notes
   generated from it — edit agents/ and run "my-agents assemble".
 
   OpenCode support is split into two targets. --opencode is the native
-  setup: core config (opencode.jsonc, AGENTS.md) plus native
+  setup: core config (opencode.jsonc) plus native
   .opencode/agents/ subagents assembled from the omos-derived prompts.
   When a user-level omos install is detected, --opencode installs the
   omos way instead — omos config + prompt overrides, no native agents —
@@ -342,7 +342,7 @@ function assembleBackend(name, outDir, opts, counts, usedSlots) {
  *  native agents would conflict with omos-provided agents. */
 function applyOpencode(targetRoot, opts, counts) {
   const set = SETS.opencode;
-  console.log(`\n.opencode/  (opencode.jsonc, AGENTS.md)`);
+  console.log(`\n.opencode/  (opencode.jsonc)`);
   copyEntries(set, set.entries, targetRoot, opts, counts);
   if (omosUserLevelPresent()) {
     console.log(`  note       user-level omos install detected; installing the omos way: omos config + prompt overrides copied, native .opencode/agents/ skipped to avoid agent conflicts (the plugin loads from user level)`);
