@@ -469,6 +469,7 @@ function assembleCommand({ check }) {
         outdated++;
       }
     } else {
+      mkdirSync(dirname(dest), { recursive: true });
       writeFileSync(dest, content);
       console.log(`assembled: ${name}.md`);
     }
