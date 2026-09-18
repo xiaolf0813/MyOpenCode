@@ -82,7 +82,7 @@ are skipped unless `--force`.
   Language Discipline and future additions) in `agents/prompts/orchestrator.md`; the
   orchestrator copies it verbatim to the top of every delegation brief. One
   rule per concern.
-- **Model / variant / displayName / council presets** →
+- **Model / variant / council presets** →
   `agents/backends/omos/oh-my-opencode-slim.jsonc`. Keep JSONC parseable
   (comments and trailing commas allowed).
 - **Prompt tuning** → append-only, via
