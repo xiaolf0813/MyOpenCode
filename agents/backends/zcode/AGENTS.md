@@ -3,8 +3,8 @@
 ## ZCode platform notes
 
 This file is installed as ZCode's global instruction file for the main
-agent. The specialist subagents referenced below — designer, explorer,
-fixer, librarian, observer, oracle, improver — are installed as user-level
+agent. The specialist subagents referenced below — explorer, fixer,
+librarian, observer, oracle, improver, ui-designer — are installed as user-level
 subagents in `~/.zcode/agents/` by the same installer. They run with
 `injectAgentsMd: false`, so this file is not injected into them: include all
 task-relevant context in every delegation brief. Subagent and frontmatter

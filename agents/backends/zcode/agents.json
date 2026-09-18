@@ -1,9 +1,9 @@
 {
   "agents": {
-    "designer": {
+    "ui-designer": {
       "frontmatter": [
-        "name: designer",
-        "description: \"UI/UX design, review, and implementation specialist. Use PROACTIVELY for any user-facing interface work - styling, responsive design, component architecture, animations/micro-interactions, visual polish, and UX review. Routes all layout, hierarchy, and interaction decisions; not for headless/backend work.\"",
+        "name: ui-designer",
+        "description: \"Pure UI design specialist. Produces design specs and self-contained HTML mockups that show how interfaces should look, feel, and behave - never edits app source. Use before implementing new screens, redesigns, or visual polish; fixer implements the design in the app. Not for implementation of any kind.\"",
         "model: inherit",
         "injectAgentsMd: false"
       ]
@@ -19,7 +19,7 @@
     "fixer": {
       "frontmatter": [
         "name: fixer",
-        "description: \"Fast implementation specialist. Receives complete context and a task spec from the orchestrator, then executes bounded code changes efficiently. Use for well-defined mechanical or multi-file edits with parallelizable scope. Not for research, architecture, debugging strategy, or UI/UX design.\"",
+        "description: \"Fast implementation specialist. Receives complete context and a task spec from the orchestrator, then executes bounded code changes efficiently. Use for well-defined mechanical or multi-file edits with parallelizable scope, including UI implementation from a ui-designer mockup/spec. Not for research, architecture, debugging strategy, or authoring visual designs (commission ui-designer first).\"",
         "model: inherit",
         "injectAgentsMd: false"
       ]

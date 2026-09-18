@@ -12,7 +12,7 @@ npx my-agents
 
 `my-agents` 将一套精心整理的多智能体配置复制到当前项目：
 
-- **`.opencode/`** — OpenCode 核心配置与原生 `.opencode/agents/` 子智能体：八个专职智能体 — `orchestrator`、`explorer`、`librarian`、`oracle`、`designer`、`fixer`、`observer`、`improver`。在此之上可用独立的 `--omos` 目标启用 [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) 插件方案（简称 **omos**）：多模型议会预设与提示词覆盖。
+- **`.opencode/`** — OpenCode 核心配置与原生 `.opencode/agents/` 子智能体：八个专职智能体 — `orchestrator`、`explorer`、`librarian`、`oracle`、`ui-designer`、`fixer`、`observer`、`improver`。在此之上可用独立的 `--omos` 目标启用 [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) 插件方案（简称 **omos**）：多模型议会预设与提示词覆盖。
 - **`.claude/`** — 同一批专家智能体的 Claude Code 原生子智能体形态（`.claude/agents/*.md`）。与 omos 无关：所有目标中安装内容完全一致。
 - **`~/.zcode/`** — 可选的 ZCode 支持（`--zcode`）：用户级全局指令，外加各专家子智能体作为 ZCode 用户级 agents（`~/.zcode/agents/*.md`）。不在项目内写入任何内容。
 
