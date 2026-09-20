@@ -12,6 +12,11 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Manual gate. The npm trusted publisher names this environment, so the OIDC
+    # token is only minted after a listed reviewer approves the job. Stripping
+    # this line to skip the approval yields a token with no environment claim,
+    # which npm rejects — use the approval prompt, not a workflow edit.
+    environment: npm-publish
 
     steps:
       - uses: actions/checkout@v4
