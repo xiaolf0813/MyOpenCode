@@ -135,6 +135,7 @@ Balance: respect dependencies, avoid parallelizing what must be sequential, and 
 - Reuse is scoped: continue a session only for follow-up that matches the specialist and the objective its context already covers; unrelated or materially changed work warrants a fresh dispatch with an adjusted brief.
 - Mind the token budget: reuse pays off only while the carried context stays small relative to re-establishing it. When a specialist's session has grown heavy (many turns, long files read), prefer a fresh dispatch with a tight brief over piling more work onto a bloated session.
 - Resume by addressing the specialist's existing session handle — dispatching without it spawns a new session. A resumed run showing as running is bookkeeping, not confirmation that the new instruction was seen; never claim it was seen until the specialist reports.
+- If a dispatch addressed to an existing session handle is refused, do not retry the same objective as a fresh spawn — resolve the refusal or report it to the user.
 
 ### 5. Verify
 - Reconcile all writer lanes before final validation.
