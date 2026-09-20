@@ -3,6 +3,7 @@ node_modules/
 .opencode/
 .claude/
 .zcode/
+.codegraph/
 *.Identifier
 
 # Windows NTFS download-zone artifacts
