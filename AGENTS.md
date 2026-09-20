@@ -45,7 +45,7 @@ committed or packaged.
 | `agents/prompts/` | Agent prompt bodies — single source, omos attribution included. |
 | `agents/prompts_cn/` | Chinese reference translations — never packaged. |
 | `agents/backends/<name>/` | Everything backend-specific: assets copied to the target, plus `agents.json` (markdown backends) and `slots/` for `{{slot:...}}` text. `dsh/` is template-only — no `agents.json`: its `agent.cordis.yml` lists the rows and pulls prompt bodies with `{{prompt:<agent>}}`, `dsh/lane-plugin/` holds the packaged host half the preset mounts, and `dsh/lane-plugin-ui/` holds the settings page the profile mounts. |
-| `docs/dsh-lane-plugin/` | The DSH lane plugin's design record: feasibility findings, the plan, and the original dynamic-plugin dump. Reference only, and never shipped (outside the `files` whitelist). |
+| `docs/dsh-lane-plugin/` | The DSH lane plugin's design record: feasibility findings, the plan, the original dynamic-plugin dump, and `BACKLOG.md` — the open follow-ups as a handoff briefing for whoever continues the work. Reference only, and never shipped (outside the `files` whitelist). |
 | `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-workbench assemble`. |
 | `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
 
