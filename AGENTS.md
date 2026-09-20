@@ -102,3 +102,19 @@ After `npx my-agents`, the target owns the same tree: edit its `agents/`
 source and run `npx my-agents assemble` there; `assemble --check` detects
 drift. Retune the model mapping to the providers and budget available in the
 target, and replace this root file with the target project's own instructions.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub Issues (xiaolf0813/MyOpenCode) via the `gh` CLI.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
