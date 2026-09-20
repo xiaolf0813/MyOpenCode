@@ -3,6 +3,18 @@
 **Target:** <https://github.com/deepseek-ai/deepseek-harness> (the `@deepseek-ai/dsh` deployment this was observed on)
 **Environment:** `@deepseek-ai/dsh` **0.1.5-rc.2** · Node **v24.15.0** · Windows **10.0.26200** (the mechanism is platform-independent)
 
+## How to post this (upstream Issues are disabled)
+
+`deepseek-ai/deepseek-harness` has **Issues turned off** and **Discussions turned on**, with the categories *Announcements · General · Ideas · Polls · Q&A · Show Your Plugins!* — there is no bug category. Post it in **Q&A** (or General) with a question-shaped opening, e.g.:
+
+> **Should re-mounting a stale preset composition leak the previous mount's `settings` registration?**
+> A preset row that calls `ctx.settings.register(…)` becomes unmountable in a running process once its composition file changes and the preset is mounted again; `remove()` plus a reinstall does not clear it, and only a full DSH restart recovers. Repro and the exact throw sites below — is the leak intended, and is disposing the stale scope before the re-mount the right fix?
+
+Two more channels worth using alongside it:
+
+- **In-app `/feedback`** in the DSH web GUI — the vendor's own surface, and it correlates the report with the session and telemetry, which a Discussion post cannot.
+- **A local issue** (`gh issue create -R xiaolf0813/my-workbench`) so the leak stays tracked here while upstream has no issue tracker.
+
 ## Suggested title
 
 `agent-presets: re-mounting a stale composition leaks the previous mount's settings namespace, wedging the preset until restart`
