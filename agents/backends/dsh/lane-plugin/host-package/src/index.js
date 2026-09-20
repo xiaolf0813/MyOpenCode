@@ -135,13 +135,23 @@ const TOOL_FILTERS = {
  * 改回继承 action writes explicit empty strings into the USER layer, which
  * overrides the base per lane — so a deployment whose profile lacks one of these
  * routes can be cleared lane by lane without editing this file.
+ *
+ * Every lane routes through `deepseek-official`, the route DSH's own
+ * `llm-deepseek` adapter always provides, so the shipped mapping depends on no
+ * provider a deployment has to add. `deepseek-v4-pro` carries every lane that
+ * writes (or writes code): oracle, ui-designer, fixer, improver; the read-only
+ * lanes that run often — explorer, librarian — take the economy
+ * `deepseek-v4-flash`, and the vision lane DeepSeek's image-capable
+ * `deepseek-v4-flash-vision-exp`. Efforts stay as they were chosen per lane
+ * (`max` only where the lane carries final judgement); the route is what
+ * changed, not the tiering.
  */
 const RECOMMENDED = {
-  explorer: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'low' },
-  librarian: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'low' },
+  explorer: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'low' },
+  librarian: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'low' },
   oracle: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' },
   'ui-designer': { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
-  fixer: { provider: 'zai-coding-cn', model: 'glm-5.3-flash', reasoningEffort: 'high' },
+  fixer: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
   observer: { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', reasoningEffort: 'low' },
   improver: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
 }
