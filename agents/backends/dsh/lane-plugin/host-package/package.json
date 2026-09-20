@@ -1,0 +1,18 @@
+{
+  "name": "my-workbench-lanes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MyWorkbench specialist lanes as a packaged DSH agent-preset plugin: one delegation tool per specialist, each reading its provider/model/reasoningEffort pin from the plugin's own settings namespace, and each applying the specialist's read-only toolFilter. HOST HALF ONLY — the settings page ships as the separate profile-layer package ../lane-plugin-ui/, because client halves are only discovered on profile rows.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "files": [
+    "src"
+  ]
+}

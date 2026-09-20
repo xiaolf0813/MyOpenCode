@@ -1,15 +1,19 @@
 # The `dsh` backend's agent preset: the my-workbench multi-agent setup for
-# DeepSeek Harness (DSH) — one orchestrator persona plus one named delegation
-# tool per specialist prompt. Installed by `my-workbench --dsh` as
-# <DSH_HOME>/.agent-presets/my-workbench/agent.cordis.yml; DSH reads it when a
-# session mounts the preset, so a new session is needed to pick it up.
+# DeepSeek Harness (DSH) — one orchestrator persona plus the lane plugin, which
+# owns the seven named specialist delegation tools. Installed by
+# `my-workbench --dsh` as <DSH_HOME>/.agent-presets/my-workbench/agent.cordis.yml,
+# beside the plugin itself at
+# <DSH_HOME>/.agent-presets/my-workbench/lane-plugin/; DSH reads a preset when a
+# session mounts it, so a new session is needed to pick it up.
 #
 # This file is assembled from agents/ source — never edit the installed copy:
 #   a `prompt:<agent>` placeholder becomes agents/prompts/<agent>.md verbatim,
 #   and the `slot:dispatch` placeholder inside the orchestrator prompt comes
 #   from agents/backends/dsh/slots/dispatch.md, as for every other backend.
-# `designer` is deliberately absent: every other backend disables it in favour
-# of the design-only ui-designer.
+# The SPECIALIST prompts no longer appear here: the lane plugin's own generated
+# module carries them, rendered from the same agents/prompts/*.md by the same
+# CLI. `designer` is deliberately absent: every other backend disables it in
+# favour of the design-only ui-designer.
 #
 # This is an AGENT-PLANE composition. The `subagents` registry, the sandbox and
 # approval stack, persistence, and the model route stay in the HOST composition;
@@ -17,7 +21,8 @@
 # PUBLISHES a service must sit inside a group carrying an `isolate` realm (see
 # the planning and compaction groups below) or the mount is rejected. A row that
 # only registers tools or consumes host services must stay OUTSIDE such a realm,
-# or it resolves a private instance this preset never populated.
+# or it resolves a private instance this preset never populated. The lane plugin
+# only registers tools and consumes host services, so it sits outside any realm.
 #
 # Deliberately omitted from the shipped `standard` preset: the anonymous
 # `subagent`/`subagent_fork` tools and the `workflow`/`ralph` engines. Here every
@@ -146,27 +151,21 @@
 
 # The `subagents` registry and its spawn backend stay in the HOST composition
 # (the registry answers cross-session queries and a provider name registers
-# once), so these rows only register tools and need no realm.
+# once), so the rows here only register tools and need no realm.
 #
-# Every row carries one specialist prompt as its child persona and restricts the
-# child's tools the way that prompt does:
+# The seven specialist lanes live in ONE packaged plugin row (`lanes`, below),
+# not in seven `@deepseek-ai/dsh-tool-subagent` rows. The plugin owns the tools,
+# which is what lets it read each lane's model/reasoning-effort pin from its own
+# persisted settings namespace and apply that lane's read-only `toolFilter`
+# itself — neither is expressible in a composition row. The lanes keep their
+# names (`subagent_explorer` … `subagent_improver`), their prompts come from
+# agents/prompts/*.md, and their restrictions are unchanged:
 #   * read-only lanes lose `write`/`edit` (observer and improver also lose the
 #     shell), so "READ-ONLY" is enforced, not merely requested;
 #   * every lane loses all seven delegation tools, so a lane cannot spawn lanes.
-#     When adding a delegation row, add its toolName to these deny lists too —
-#     `tools.restrict()` rejects unknown names, so a stale list fails loudly.
-# The shell name is platform-dependent, hence the `!!js` conditional: naming the
-# tool this platform does not register would make the spawn itself fail.
-#
-# Model routing: lanes inherit the orchestrator's route by default. To pin a
-# faster/cheaper route per lane, add to that row (the route must exist in this
-# DSH profile):
-#     agentOptions:
-#       provider: <provider-id>
-#       model: <model-id>
-# Setting `modelSelectionSettings: true` instead exposes provider/model/
-# reasoning_effort on every lane, readable from the host's subagent route
-# preference, at the cost of a wider schema per tool.
+# Model routing now lives in the plugin's settings namespace (settings →
+# MyWorkbench 赛道模型), seeded from the plugin's recommended mapping; see
+# docs/dsh-lane-plugin/PLAN.md and lane-plugin/host-package/src/index.js.
 - id: delegation
   name: cordis:group
   group: true
@@ -177,88 +176,27 @@
     - id: tool-subagent-list-agents
       name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 
-    # Background-first (continuable) delegation: a call returns a durable child
-    # id and the completion notice re-invokes the orchestrator. Pass
-    # `run_in_background: false` for a lane whose result gates the next step.
-    - id: subagent-explorer
-      name: '@deepseek-ai/dsh-tool-subagent'
+    # The lane plugin. It owns the seven delegation tools and registers them in
+    # THIS preset's scope, so they exist for MyWorkbench sessions only — no other
+    # preset gains a tool, and the settings page it publishes is inert outside
+    # MyWorkbench. Background-first (continuable) delegation is unchanged: a call
+    # returns a durable child id, and `run_in_background: false` waits for the
+    # final text.
+    #
+    # `name` is RELATIVE on purpose. A preset row's bare package name resolves
+    # from the host composition's base, not from this preset's directory, so a
+    # package shipped alongside the composition would not be found; a
+    # `./`-relative name resolves against the composition's own directory, which
+    # is where `my-workbench --dsh` puts the plugin. That is what keeps the
+    # install free of profile-level writes and dependency commands.
+    #
+    # The plugin must be named by THIS preset only: it registers a settings
+    # namespace, and DSH refuses a duplicate registration, so a second preset
+    # mounting the same row would fail loudly.
+    - id: lanes
+      name: ./lane-plugin/src/index.js
       config:
-        provider: spawn
-        toolName: subagent_explorer
-        backgroundMode: continuable
-        persona: |
-          {{prompt:explorer}}
-        toolFilter:
-          deny: !!js "['write', 'edit', 'subagent_librarian', 'subagent_oracle', 'subagent_ui_designer', 'subagent_fixer', 'subagent_observer', 'subagent_improver']"
-
-    - id: subagent-librarian
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_librarian
-        backgroundMode: continuable
-        persona: |
-          {{prompt:librarian}}
-        toolFilter:
-          deny: !!js "['write', 'edit', 'subagent_explorer', 'subagent_oracle', 'subagent_ui_designer', 'subagent_fixer', 'subagent_observer', 'subagent_improver']"
-
-    - id: subagent-oracle
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_oracle
-        backgroundMode: continuable
-        persona: |
-          {{prompt:oracle}}
-        toolFilter:
-          deny: !!js "['write', 'edit', 'subagent_explorer', 'subagent_librarian', 'subagent_ui_designer', 'subagent_fixer', 'subagent_observer', 'subagent_improver']"
-
-    # ui-designer writes its own mockup/spec deliverables, so it keeps
-    # write/edit; it still never touches app source (its prompt's job).
-    - id: subagent-ui-designer
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_ui_designer
-        backgroundMode: continuable
-        persona: |
-          {{prompt:ui-designer}}
-        toolFilter:
-          deny: !!js "['subagent_explorer', 'subagent_librarian', 'subagent_oracle', 'subagent_fixer', 'subagent_observer', 'subagent_improver']"
-
-    # fixer is the only lane that implements: full tools, still a leaf.
-    - id: subagent-fixer
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_fixer
-        backgroundMode: continuable
-        persona: |
-          {{prompt:fixer}}
-        toolFilter:
-          deny: !!js "['subagent_explorer', 'subagent_librarian', 'subagent_oracle', 'subagent_ui_designer', 'subagent_observer', 'subagent_improver']"
-
-    - id: subagent-observer
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_observer
-        backgroundMode: continuable
-        persona: |
-          {{prompt:observer}}
-        toolFilter:
-          deny: !!js "['write', 'edit', 'subagent_explorer', 'subagent_librarian', 'subagent_oracle', 'subagent_ui_designer', 'subagent_fixer', 'subagent_improver'].concat(process.platform === 'win32' ? ['pwsh'] : ['bash'])"
-
-    - id: subagent-improver
-      name: '@deepseek-ai/dsh-tool-subagent'
-      config:
-        provider: spawn
-        toolName: subagent_improver
-        backgroundMode: continuable
-        persona: |
-          {{prompt:improver}}
-        toolFilter:
-          deny: !!js "['write', 'edit', 'subagent_explorer', 'subagent_librarian', 'subagent_oracle', 'subagent_ui_designer', 'subagent_fixer', 'subagent_observer'].concat(process.platform === 'win32' ? ['pwsh'] : ['bash'])"
+        maxDepth: 3
 
 # ── remaining model-facing rows ─────────────────────────────────────────────
 
