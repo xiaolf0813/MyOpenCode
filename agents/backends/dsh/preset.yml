@@ -1,2 +1,3 @@
 name: MyWorkbench
-description: 编排模式：orchestrator 主 agent + 7 名专家子 agent（explorer / librarian / oracle / ui-designer / fixer / observer / improver），提示词来自 agents/prompts/，委派走具名 subagent 工具。
+description: 以领队工程师的方式工作：把复杂编码任务拆成可并行的专职工作流，交给 7 名专家子 agent（探查 / 资料检索 / 架构评审 / UI 设计 / 实现 / 验证 / 视觉分析）并行执行，再统一核验与汇总结果。
+order: 5
