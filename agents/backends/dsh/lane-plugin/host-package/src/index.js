@@ -315,20 +315,49 @@ export function apply(ctx, config) {
   // DSH restart (`<DSH_HOME>/settings.yaml` — nm/dsh-settings-file/lib/index.js:32)
   // and every GUI write is a normal settings write with a revision check.
   //
-  // Per-mount safety: `register` throws when the namespace is already taken
-  // (nm/dsh-settings/lib/index.js:283). Safe here only because this plugin is
-  // named by exactly ONE preset — the composition is mounted once per preset id
-  // per process (nm/dsh-agent-presets/lib/index.js:1768-1776) and sessions join
-  // that mount (:1499-1505). Naming this row from a second preset would make the
-  // second mount fail loudly.
-  const scope = ctx.settings.register(LANE_NAMESPACE, LaneSettingsSchema, { base: RECOMMENDED })
+  // Registration must TOLERATE an already-registered namespace. `register` throws
+  // when the name is taken (nm/dsh-settings/lib/index.js:283), and that fires not
+  // only when a second preset names this row but also for THIS preset whenever
+  // DSH re-mounts a stale composition: `ensureStanding` drops the standing mount
+  // whose file stamp changed and mounts a fresh one WITHOUT disposing the old
+  // scope first (nm/dsh-agent-presets/lib/index.js:1768-1776), so the previous
+  // registration is still live while this `apply()` runs. Reinstalling the preset
+  // (`my-workbench --dsh --force`) is exactly that path, and letting the throw
+  // escape would make the preset unswitchable until a DSH restart.
+  //
+  // A standing generation lives until the process exits, so the surviving
+  // registration carries the same schema and base this mount would have
+  // installed; reads and GUI writes keep working through it.
+  let scope = null
+  try {
+    scope = ctx.settings.register(LANE_NAMESPACE, LaneSettingsSchema, { base: RECOMMENDED })
+  } catch (error) {
+    const reason = error !== null && typeof error === 'object' && typeof error.message === 'string' ? error.message : String(error)
+    if (ctx.logger !== undefined && typeof ctx.logger.warn === 'function') {
+      ctx.logger.warn('my-workbench-lanes: settings namespace already registered — reusing the existing registration (' + reason + ')')
+    }
+  }
+
+  /** The value an earlier mount's registration still holds, when this mount could not register. */
+  const survivingValue = () => {
+    try {
+      const value = ctx.settings.get(LANE_NAMESPACE)
+      return value !== null && typeof value === 'object' ? value : undefined
+    } catch (error) {
+      return undefined
+    }
+  }
 
   // `scope.get()` already resolves schema defaults → composition base → user
   // layer (nm/dsh-settings/lib/index.js:509-513). Read it per spawn instead of
   // caching, so a live write applies to the very next delegation.
   const pins = () => {
-    const value = scope.get()
-    return value !== null && typeof value === 'object' ? value : {}
+    if (scope !== null) {
+      const value = scope.get()
+      return value !== null && typeof value === 'object' ? value : {}
+    }
+    const value = survivingValue()
+    return value === undefined ? RECOMMENDED : value
   }
 
   // Resolve every persona once, at registration: a missing generated prompt

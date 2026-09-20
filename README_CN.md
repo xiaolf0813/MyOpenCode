@@ -99,6 +99,7 @@ DSH 发现浏览器（client）插件半的方式是扫描 **profile loader 自�
 - 页面在 `apply()` 中**同步注册**，由组件自己决定显示什么：`my-workbench-lanes` 命名空间已注册时显示可操作控件，否则显示惰性占位。最初「先 await 门禁再注册」的写法会让 shell 账本里的条目变成 `active: false`（其它分区都是 `active: true`），面板渲染为空白，所以判断移进了组件。
 - 因此从未挂载过 MyWorkbench 的部署会看到**一个没有控件、没有写入路径**的导航条目；一旦任何 MyWorkbench 会话挂载过 host 半（命名空间是进程级的），同一个页面在任何会话里都是可用的 —— 它编辑的固定值只被 MyWorkbench 会话消费。
 - 组件在每次打开该分区时重新读取命名空间，所以**刷新一次页面**只是为了加载/更新浏览器 bundle。
+- **改动 lane 插件的 Host 半需要重启 DSH，只重装不够。** preset 行每个进程只 import 一次 —— Node 的 ESM 缓存，而且 DSH 重挂载 stale 组合时用的仍是**同一个 specifier** —— 所以 `--dsh --force` 之后运行中的进程还是旧代码。更麻烦的是：stale 挂载对设置命名空间的注册**永远不会被释放**（`ensureStanding` 丢弃挂载时没有 dispose 它的 scope），因此"无条件注册"的旧代码会让下一次挂载直接失败：`settings namespace "my-workbench-lanes" is already registered`。现在随包发布的 Host 半会容忍这种重复注册、直接沿用存活的那份注册；这个容忍逻辑在**下次 DSH 重启**后生效。设置页面属于浏览器模块，只需刷新页面。
 - 若找不到唯一的 profile 目录，则不会向任何 profile 写入，并会打印出可直接粘贴的行。
 
 **委派与按赛道路由**

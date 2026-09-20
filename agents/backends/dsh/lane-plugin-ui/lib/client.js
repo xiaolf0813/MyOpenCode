@@ -80,11 +80,12 @@ window.__ModuleLoader__.load({
       '.mwl-page{padding:18px 0;display:flex;flex-direction:column;gap:14px;max-width:760px}' +
       '.mwl-title{margin:0;font-size:18px;font-weight:600;color:var(--dsw-alias-label-primary,#111)}' +
       '.mwl-intro{margin:0;font-size:13px;line-height:20px;color:var(--dsw-alias-label-tertiary,#666)}' +
-      '.mwl-row{display:grid;grid-template-columns:minmax(190px,240px) 1fr 1fr;gap:10px;align-items:center;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l4,rgba(0,0,0,.1));border-radius:12px}' +
+      '.mwl-row{display:grid;grid-template-columns:minmax(160px,200px) minmax(0,1fr) 80px;gap:10px;align-items:center;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l4,rgba(0,0,0,.1));border-radius:12px}' +
       '.mwl-name{font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary,#111);display:flex;flex-direction:column;gap:2px;min-width:0}' +
       '.mwl-key,.mwl-sub{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
       '.mwl-sub{font-size:11px;color:var(--dsw-alias-label-caption,#888)}' +
       '.mwl-select{width:100%;min-height:30px;font-size:12px;padding:4px 6px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4,rgba(0,0,0,.1));background:transparent;color:var(--dsw-alias-label-primary,#111)}' +
+      '.mwl-effort{padding:4px 2px}' +
       '.mwl-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}' +
       '.mwl-button{min-height:30px;padding:0 14px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l4,rgba(0,0,0,.1));background:transparent;color:var(--dsw-alias-label-primary,#111);font-size:13px;cursor:pointer}' +
       '.mwl-button:disabled{opacity:.5;cursor:default}' +
@@ -274,7 +275,7 @@ window.__ModuleLoader__.load({
       }
 
       function effortOptions(pin) {
-        const list = [h('option', { key: '__default', value: '' }, '模型默认')]
+        const list = [h('option', { key: '__default', value: '' }, '默认')]
         if (routeKeyOf(pin) === null) return list
         for (const group of groups) {
           if (group.id !== pin.provider) continue
@@ -349,6 +350,7 @@ window.__ModuleLoader__.load({
             className: 'mwl-select',
             value,
             disabled: busy,
+            title: value === '' ? '继承会话模型（跟随当前会话的路由）' : value.split('|').join(' / '),
             onChange: (event) => {
               const next = String(event.target.value)
               if (next === '') { setLane(lane.key, { provider: '', model: '', reasoningEffort: '' }); return }
@@ -357,9 +359,10 @@ window.__ModuleLoader__.load({
             }
           }, modelOptions()),
           h('select', {
-            className: 'mwl-select',
+            className: 'mwl-select mwl-effort',
             value: pin.reasoningEffort,
             disabled: busy || routeKeyOf(pin) === null,
+            title: pin.reasoningEffort === '' ? '模型默认的推理等级' : pin.reasoningEffort,
             onChange: (event) => setLane(lane.key, { reasoningEffort: String(event.target.value) })
           }, effortOptions(pin))
         )

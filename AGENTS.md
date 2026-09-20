@@ -102,12 +102,19 @@ tools, no services, no packages installed into any `node_modules`, and no other
 preset gains a tool. The page registers SYNCHRONOUSLY from `apply()` and decides
 inside the component what to show — live controls while the lane host half's
 namespace is registered, an inert placeholder otherwise — because registering
-after an `await` left the ledger entry `active: false` and the panel blank. The host half must be named by this preset only — it registers a settings
-namespace and DSH refuses a duplicate registration. It requires an existing DSH
+after an `await` left the ledger entry `active: false` and the panel blank. The host half must be named by this preset only, because it registers a settings
+namespace and DSH refuses a duplicate registration — and it must TOLERATE an
+already-registered namespace, because DSH re-mounts a stale composition without
+disposing the previous mount's scope, which leaves the old registration live. It
+requires an existing DSH
 home, no omos, no downloads, nothing written inside the repo or the project;
 existing files are skipped unless `--force`. DSH reads presets at session start,
 so a restart of the session is what picks a change up, after which one page
-refresh reveals the settings page.
+refresh reveals the settings page. A change to the lane plugin's **host** code
+needs a full DSH restart: the preset row is imported once per process (Node's
+ESM cache; the loader re-imports the same specifier when it re-mounts a stale
+composition), while the settings page is a browser module that a page reload
+refreshes.
 
 ## Editing conventions
 
