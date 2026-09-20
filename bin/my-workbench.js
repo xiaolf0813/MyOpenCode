@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// my-agents CLI — copy the OpenCode / Claude Code agent setup into the current
+// my-workbench CLI — copy the OpenCode / Claude Code agent setup into the current
 // project (or, with --user, into the tools' user-level config roots), plus
 // opt-in user-level ZCode support (~/.zcode).
 // Zero dependencies. Project targets use the current working directory;
@@ -57,12 +57,12 @@ function isSkipped(name) {
 /** Placeholders in shared prompt bodies: {{slot:<name>}} -> agents/backends/<backend>/slots/<name>.md */
 const SLOT_RE = /\{\{slot:([\w-]+)\}\}/g;
 
-const HELP = `my-agents — scaffold the OpenCode / Claude Code agent setup into the current
+const HELP = `my-workbench — scaffold the OpenCode / Claude Code agent setup into the current
 project (or at user level with --user), plus opt-in user-level ZCode support
 
 Usage
-  npx my-agents [targets...] [options]
-  npx my-agents assemble [--check]
+  npx my-workbench [targets...] [options]
+  npx my-workbench assemble [--check]
 
 Commands
   assemble [--check]      regenerate this repository's .claude/agents/ from the
@@ -94,7 +94,7 @@ Notes
   once (with its omos attribution notice), and backends/<name>/ holds
   everything backend-specific — assets plus per-agent header metadata in
   agents.json. This repository's .claude/agents/ and .opencode/ are
-  generated from it — edit agents/ and run "my-agents assemble".
+  generated from it — edit agents/ and run "my-workbench assemble".
 
   OpenCode support is split into two targets. --opencode is the native
   setup: core config (opencode.jsonc) plus native
@@ -106,7 +106,7 @@ Notes
   (oh-my-opencode-slim.jsonc, prompt overrides, package.json) into
   .opencode/; it requires OpenCode plus an existing user-level omos
   install (~/.config/opencode). The plugin loads from that user level, so
-  my-agents never pins a "plugin" entry and never downloads anything.
+  my-workbench never pins a "plugin" entry and never downloads anything.
 
   ZCode target (--zcode or "zcode") is never part of the default set. It
   composes the global ~/.zcode/AGENTS.md from agents/backends/zcode/AGENTS.md
@@ -115,12 +115,12 @@ Notes
   nothing. ZCode picks up changes in new sessions only.
 
 Examples
-  npx my-agents                    # copy both .opencode/ and .claude/
-  npx my-agents --opencode         # OpenCode setup only
-  npx my-agents --omos             # omos plugin scheme only (no native agents)
-  npx my-agents claude --force     # positional target form, overwrite existing files
-  npx my-agents --user             # user-level: ~/.config/opencode/ + ~/.claude/
-  npx my-agents --zcode            # ZCode user-level setup only (~/.zcode)
+  npx my-workbench                    # copy both .opencode/ and .claude/
+  npx my-workbench --opencode         # OpenCode setup only
+  npx my-workbench --omos             # omos plugin scheme only (no native agents)
+  npx my-workbench claude --force     # positional target form, overwrite existing files
+  npx my-workbench --user             # user-level: ~/.config/opencode/ + ~/.claude/
+  npx my-workbench --zcode            # ZCode user-level setup only (~/.zcode)
 `;
 
 function parseArgs(argv) {
@@ -449,7 +449,7 @@ function syncOpencodeAssets({ check }) {
 }
 
 /**
- * `my-agents assemble`: regenerate this repository's generated config from
+ * `my-workbench assemble`: regenerate this repository's generated config from
  * the single-source agents/ tree: `.claude/agents/` (claude backend) and
  * `.opencode/` (opencode + omos backend assets). `--check` only verifies.
  */
@@ -481,7 +481,7 @@ function assembleCommand({ check }) {
   if (check) {
     if (outdated === 0) console.log("check OK: .claude/agents/ and .opencode/ match agents/ source");
     else {
-      console.log(`check FAILED: ${outdated} file(s) outdated; run "my-agents assemble" to regenerate`);
+      console.log(`check FAILED: ${outdated} file(s) outdated; run "my-workbench assemble" to regenerate`);
       process.exitCode = 1;
     }
   }
@@ -506,7 +506,7 @@ async function main() {
   }
 
   // Prerequisite gate: fail fast with no writes. --omos demands an existing
-  // user-level omos install because the plugin loads from there — my-agents
+  // user-level omos install because the plugin loads from there — my-workbench
   // never pins a plugin entry and never downloads anything.
   const prereqFailures = [];
   if (opts.targets.has("opencode") && !opencodeInstalled()) {
@@ -528,7 +528,7 @@ async function main() {
   // repository itself.
   const touchesProjectTargets = opts.targets.has("opencode") || opts.targets.has("omos") || opts.targets.has("claude");
   if (!opts.user && touchesProjectTargets && resolve(targetRoot) === PKG_ROOT) {
-    console.log("current directory is the my-agents source repository; nothing to copy. Use \"my-agents assemble\" to regenerate .claude/agents/ from agents/ source.");
+    console.log("current directory is the my-workbench source repository; nothing to copy. Use \"my-workbench assemble\" to regenerate .claude/agents/ from agents/ source.");
     return;
   }
 
@@ -556,10 +556,10 @@ async function main() {
   const dry = opts.dryRun ? "  (dry-run)" : "";
   console.log(
     zcodeOnly
-      ? `my-agents: installing ZCode agent setup into ~/.zcode (user-level)${dry}`
+      ? `my-workbench: installing ZCode agent setup into ~/.zcode (user-level)${dry}`
       : opts.user
-        ? `my-agents: installing agent setup at user level (~/.config/opencode, ~/.claude)${dry}`
-        : `my-agents: installing agent setup into ${targetRoot}${dry}`,
+        ? `my-workbench: installing agent setup at user level (~/.config/opencode, ~/.claude)${dry}`
+        : `my-workbench: installing agent setup into ${targetRoot}${dry}`,
   );
 
   if (opts.targets.has("opencode")) applyOpencode(scopes.opencode, displayOpts, counts);

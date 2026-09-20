@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository ships **my-agents**, an npm CLI that installs a portable
+This repository ships **my-workbench**, an npm CLI that installs a portable
 OpenCode + Claude Code agent setup into a target project (or, with `--user`,
 at user level: `~/.config/opencode/` + `~/.claude/`). OpenCode support
 is split into a native target and an opt-in omos target (the
@@ -8,7 +8,7 @@ is split into a native target and an opt-in omos target (the
 auto-loaded from the repo root on every run — keep it structural and lean.
 
 There is no build and no test suite. Validation means:
-`node bin/my-agents.js assemble --check` passes and every touched file still
+`node bin/my-workbench.js assemble --check` passes and every touched file still
 parses. CLI behavior changes apply on the next run.
 
 ## Single source & generated files
@@ -23,12 +23,12 @@ parses. CLI behavior changes apply on the next run.
 | `agents/backends/omos/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
 | `agents/backends/omos/package.json` | `.opencode/package.json` |
 | `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
-| `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-agents --zcode`; nothing generated inside the repo) |
+| `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-workbench --zcode`; nothing generated inside the repo) |
 
-After editing any source, run `npx my-agents assemble` in the repo root
+After editing any source, run `npx my-workbench assemble` in the repo root
 (`--check` verifies without writing). The generated `.claude/` and
 `.opencode/` are gitignored — they exist only on your machine; a fresh clone
-materializes them with `npx my-agents assemble`. `.opencode/node_modules/`
+materializes them with `npx my-workbench assemble`. `.opencode/node_modules/`
 and `.opencode/package-lock.json` are installed runtime artifacts — never
 committed or packaged.
 
@@ -36,12 +36,12 @@ committed or packaged.
 
 | Path | Role |
 | --- | --- |
-| `bin/my-agents.js` | The CLI (zero dependencies, ESM). |
+| `bin/my-workbench.js` | The CLI (zero dependencies, ESM). |
 | `agents/prompts/` | Agent prompt bodies — single source, omos attribution included. |
 | `agents/prompts_cn/` | Chinese reference translations — never packaged. |
 | `agents/backends/<name>/` | Everything backend-specific: assets copied to the target plus `agents.json` (per-agent frontmatter used to assemble agent markdown). |
-| `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-agents assemble`. |
-| `package.json` | npm package **`my-agents`**; the `files` whitelist is the tarball contract. |
+| `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-workbench assemble`. |
+| `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
 
 ## OpenCode targets (opencode / omos)
 
@@ -56,7 +56,7 @@ committed or packaged.
   `package.json`) into `.opencode/`; the `orchestrator_append.md` override
   carries the universal Disciplines (the omos orchestrator prompt is
   plugin-provided). The plugin loads from the user level,
-  so my-agents never pins a `"plugin"` entry and never downloads anything;
+  so my-workbench never pins a `"plugin"` entry and never downloads anything;
   a missing prerequisite fails fast before any write. Exclusive with
   `--opencode`.
 
@@ -91,15 +91,15 @@ are skipped unless `--force`.
   replacement must restate the entire bundled prompt and is a last resort.
 - **Terminology**: in prose and docs, call the plugin **omos**. Keep the full
   name `oh-my-opencode-slim` in paths and filenames.
-- **No downloads**: my-agents never pins a `"plugin"` entry and never
+- **No downloads**: my-workbench never pins a `"plugin"` entry and never
   downloads or executes anything. The omos target only copies project assets
   and requires a pre-existing user-level omos install; never widen it
   silently.
 
 ## Target projects
 
-After `npx my-agents`, the target owns the same tree: edit its `agents/`
-source and run `npx my-agents assemble` there; `assemble --check` detects
+After `npx my-workbench`, the target owns the same tree: edit its `agents/`
+source and run `npx my-workbench assemble` there; `assemble --check` detects
 drift. Retune the model mapping to the providers and budget available in the
 target, and replace this root file with the target project's own instructions.
 
@@ -107,7 +107,7 @@ target, and replace this root file with the target project's own instructions.
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (xiaolf0813/MyOpenCode) via the `gh` CLI.
+Issues are tracked in GitHub Issues (xiaolf0813/my-workbench) via the `gh` CLI.
 See `docs/agents/issue-tracker.md`.
 
 ### Triage labels

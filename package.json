@@ -1,18 +1,18 @@
 {
-  "name": "my-agents",
+  "name": "my-workbench",
   "version": "0.9.1",
   "description": "Portable OpenCode + Claude Code agent setup: copies the .opencode/ and .claude/ agent configuration into your project (or user level with --user).",
   "license": "MIT",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xiaolf0813/MyOpenCode.git"
+    "url": "git+https://github.com/xiaolf0813/my-workbench.git"
   },
   "bugs": {
-    "url": "https://github.com/xiaolf0813/MyOpenCode/issues"
+    "url": "https://github.com/xiaolf0813/my-workbench/issues"
   },
   "bin": {
-    "my-agents": "bin/my-agents.js"
+    "my-workbench": "bin/my-workbench.js"
   },
   "files": [
     "bin/",
