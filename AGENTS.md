@@ -2,14 +2,17 @@
 
 This repository ships **my-workbench**, an npm CLI that installs a portable
 OpenCode + Claude Code agent setup into a target project (or, with `--user`,
-at user level: `~/.config/opencode/` + `~/.claude/`). OpenCode support
+at user level: `~/.config/opencode/` + `~/.claude/`), plus two opt-in
+user-level targets: ZCode (`--zcode`) and DeepSeek Harness agent presets
+(`--dsh`). OpenCode support
 is split into a native target and an opt-in omos target (the
 `oh-my-opencode-slim` plugin, short name: **omos**). This file is
 auto-loaded from the repo root on every run — keep it structural and lean.
 
 There is no build and no test suite. Validation means:
-`node bin/my-workbench.js assemble --check` passes and every touched file still
-parses. CLI behavior changes apply on the next run.
+`node bin/my-workbench.js assemble --check` passes (it also renders the dsh
+composition) and every touched file still parses. CLI behavior changes apply on
+the next run.
 
 ## Single source & generated files
 
@@ -24,6 +27,7 @@ parses. CLI behavior changes apply on the next run.
 | `agents/backends/omos/package.json` | `.opencode/package.json` |
 | `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
 | `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-workbench --zcode`; nothing generated inside the repo) |
+| `agents/backends/dsh/` | `~/.dsh/.agent-presets/my-workbench/` (user-level; via `npx my-workbench --dsh`; nothing generated inside the repo) |
 
 After editing any source, run `npx my-workbench assemble` in the repo root
 (`--check` verifies without writing). The generated `.claude/` and
@@ -39,7 +43,7 @@ committed or packaged.
 | `bin/my-workbench.js` | The CLI (zero dependencies, ESM). |
 | `agents/prompts/` | Agent prompt bodies — single source, omos attribution included. |
 | `agents/prompts_cn/` | Chinese reference translations — never packaged. |
-| `agents/backends/<name>/` | Everything backend-specific: assets copied to the target plus `agents.json` (per-agent frontmatter used to assemble agent markdown). |
+| `agents/backends/<name>/` | Everything backend-specific: assets copied to the target, plus `agents.json` (markdown backends) and `slots/` for `{{slot:...}}` text. `dsh/` is template-only — no `agents.json`: its `agent.cordis.yml` lists the rows and pulls prompt bodies with `{{prompt:<agent>}}`. |
 | `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-workbench assemble`. |
 | `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
 
@@ -69,6 +73,19 @@ user-level only — `~/.zcode/AGENTS.md` composed from
 downloads, nothing written inside the repo or the project; existing files
 are skipped unless `--force`.
 
+**DSH target** (opt-in via `--dsh`/`dsh`, never in the default set):
+user-level only — one agent preset at `<DSH_HOME>/.agent-presets/my-workbench/`
+(`DSH_HOME`, else `~/.dsh`), holding `preset.yml` (picker metadata, copied from
+the backend) and `agent.cordis.yml` (the composition, rendered from the backend
+template). The composition is the orchestrator prompt as the preset persona
+plus one `@deepseek-ai/dsh-tool-subagent` row per specialist, each carrying that
+specialist's prompt as the child persona and a `toolFilter` matching the prompt
+(read-only lanes lose `write`/`edit`, observer/improver also lose the shell,
+every lane loses the delegation tools). It requires an existing DSH home, no
+omos, no downloads, nothing written inside the repo or the project; existing
+files are skipped unless `--force`. DSH reads presets at session start, so a
+restart of the session is what picks a change up.
+
 ## Editing conventions
 
 - **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change,
@@ -78,6 +95,14 @@ are skipped unless `--force`.
   `agents/prompts/*.md`; per-backend content in
   `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt
   must exist for every backend or assembly fails.
+- **DSH preset composition** → `agents/backends/dsh/agent.cordis.yml` is the
+  template: rows, each specialist's `toolName`, and its `toolFilter`. A
+  `{{prompt:<agent>}}` placeholder must stand alone on its own line and is
+  filled from `agents/prompts/<agent>.md` as a YAML block. Adding a specialist
+  means adding its row **and** its `toolName` to every other row's
+  `toolFilter.deny` list (a lane must stay a leaf); `tools.restrict()` rejects
+  unknown names, so a stale list fails loudly at spawn. Reinstall with
+  `npx my-workbench --dsh`, then start a new DSH session.
 - **Universal behavior rules** → the "Disciplines" section (Fact/Security/
   Language Discipline and future additions) in `agents/prompts/orchestrator.md`; the
   orchestrator copies it verbatim to the top of every delegation brief. One

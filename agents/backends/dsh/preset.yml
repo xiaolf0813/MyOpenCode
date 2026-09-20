@@ -1,0 +1,2 @@
+name: MyWorkbench
+description: 编排模式：orchestrator 主 agent + 7 名专家子 agent（explorer / librarian / oracle / ui-designer / fixer / observer / improver），提示词来自 agents/prompts/，委派走具名 subagent 工具。

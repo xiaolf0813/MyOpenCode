@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // my-workbench CLI — copy the OpenCode / Claude Code agent setup into the current
 // project (or, with --user, into the tools' user-level config roots), plus
-// opt-in user-level ZCode support (~/.zcode).
+// opt-in user-level ZCode support (~/.zcode) and DSH agent presets (~/.dsh).
 // Zero dependencies. Project targets use the current working directory;
 // user-level targets always use the home directory.
 
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -38,11 +38,14 @@ const SETS = {
   },
 };
 
-/** Assemblable agent backends: metadata file in agents/backends/ + output dir. */
+/** Assemblable agent markdown backends: metadata file in agents/backends/ + output dir. */
 const BACKENDS = {
   claude: ".claude/agents",
   opencode: ".opencode/agents",
 };
+
+/** Directory name of the DSH agent preset installed into <DSH_HOME>/.agent-presets/. */
+const DSH_PRESET_ID = "my-workbench";
 
 /** Never copied, no matter where they appear in a source tree. */
 function isSkipped(name) {
@@ -57,8 +60,12 @@ function isSkipped(name) {
 /** Placeholders in shared prompt bodies: {{slot:<name>}} -> agents/backends/<backend>/slots/<name>.md */
 const SLOT_RE = /\{\{slot:([\w-]+)\}\}/g;
 
+/** Placeholders in backend templates: {{prompt:<agent>}} -> agents/prompts/<agent>.md, embedded verbatim */
+const PROMPT_RE = /\{\{prompt:([\w-]+)\}\}/g;
+
 const HELP = `my-workbench — scaffold the OpenCode / Claude Code agent setup into the current
 project (or at user level with --user), plus opt-in user-level ZCode support
+and DSH agent presets
 
 Usage
   npx my-workbench [targets...] [options]
@@ -80,11 +87,16 @@ ZCode target (opt-in only; user-level, writes to your home directory)
   --zcode                 install ~/.zcode/AGENTS.md + ~/.zcode/agents/*.md
                           (takes effect in new ZCode sessions)
 
+DSH target (opt-in only; user-level, writes to your DSH home)
+  --dsh                   install the agent preset ~/.dsh/.agent-presets/
+                          my-workbench/ (orchestrator + named specialist
+                          subagents; takes effect in new DSH sessions)
+
 Options
   --user                  install at user level instead of the current project:
                           opencode/omos assets go to ~/.config/opencode/,
-                          Claude Code assets to ~/.claude/ (ZCode is always
-                          user-level and ignores this flag)
+                          Claude Code assets to ~/.claude/ (ZCode and DSH are
+                          always user-level and ignore this flag)
   --force                 overwrite files that already exist (default: skip them)
   --dry-run               print what would be copied without writing anything
   -h, --help              show this help
@@ -114,6 +126,15 @@ Notes
   ~/.zcode/agents/, skips existing files unless --force, and downloads
   nothing. ZCode picks up changes in new sessions only.
 
+  DSH target (--dsh or "dsh") is never part of the default set either. It
+  renders agents/backends/dsh/agent.cordis.yml into an agent preset at
+  <DSH_HOME>/.agent-presets/my-workbench/ (DSH_HOME, else ~/.dsh): the
+  orchestrator prompt as the preset persona plus one named delegation tool
+  per specialist prompt, each carrying its prompt as the child persona and a
+  tool restriction matching it. Native delegation replaces the Task tool, so
+  the roster is unchanged. Skips existing files unless --force, downloads
+  nothing, and takes effect in new DSH sessions only.
+
 Examples
   npx my-workbench                    # copy both .opencode/ and .claude/
   npx my-workbench --opencode         # OpenCode setup only
@@ -121,6 +142,7 @@ Examples
   npx my-workbench claude --force     # positional target form, overwrite existing files
   npx my-workbench --user             # user-level: ~/.config/opencode/ + ~/.claude/
   npx my-workbench --zcode            # ZCode user-level setup only (~/.zcode)
+  npx my-workbench --dsh              # DSH agent preset only (~/.dsh)
 `;
 
 function parseArgs(argv) {
@@ -156,6 +178,10 @@ function parseArgs(argv) {
       case "--zcode":
       case "zcode":
         targets.add("zcode");
+        break;
+      case "--dsh":
+      case "dsh":
+        targets.add("dsh");
         break;
       case "--user":
         user = true;
@@ -357,6 +383,58 @@ function assembleBackend(name, outDir, opts, counts, usedSlots) {
   if (usedSlots === undefined) warnUnusedSlots(name, slots);
 }
 
+// ── DSH agent preset ────────────────────────────────────────────────────────
+
+/** DSH home: $DSH_HOME wins, else ~/.dsh (the layout DSH itself creates). */
+function dshHome() {
+  return process.env.DSH_HOME || join(homedir(), ".dsh");
+}
+
+/** Read one shared prompt body; a backend template may only reference prompts that exist. */
+function promptBody(agentName) {
+  const file = join(PKG_ROOT, "agents", "prompts", `${agentName}.md`);
+  if (!existsSync(file)) {
+    throw new Error(`agents/prompts/${agentName}.md is missing (referenced by a backend template)`);
+  }
+  return readFileSync(file, "utf8");
+}
+
+/**
+ * Replace {{prompt:<agent>}} placeholders in a backend template with that
+ * agent's shared prompt body — a structured target file embeds the prompt, it
+ * never duplicates it. Every placeholder must stand alone on its own line: the
+ * body lands in its place as a YAML literal block scalar, indented to the
+ * placeholder's own column, with any {{slot:...}} placeholders inside the body
+ * filled from the backend's slots/ first.
+ */
+function fillPrompts(template, backendName, usedSlots) {
+  return template.replace(PROMPT_RE, (raw, agentName, offset, source) => {
+    const lineStart = source.lastIndexOf("\n", offset) + 1;
+    const lineEnd = source.indexOf("\n", offset);
+    const line = source.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+    if (line.trim() !== raw) {
+      throw new Error(`{{prompt:${agentName}}} must stand alone on its own line in agents/backends/${backendName}/`);
+    }
+    const pad = " ".repeat(line.match(/^\s*/)[0].length);
+    const body = fillSlots(promptBody(agentName), backendName, usedSlots).replace(/\s+$/, "");
+    // The match starts after the placeholder line's own indentation, so the
+    // body's first line already sits at `pad` columns and only the rest need it.
+    return body
+      .split("\n")
+      .map((text, index) => (text.trim() === "" ? "" : index === 0 ? text : pad + text))
+      .join("\n");
+  });
+}
+
+/** Render the DSH preset composition from its template; an unfilled placeholder is an error. */
+function renderDshComposition(usedSlots) {
+  const template = readFileSync(join(PKG_ROOT, "agents", "backends", "dsh", "agent.cordis.yml"), "utf8");
+  const rendered = fillPrompts(template, "dsh", usedSlots);
+  const leftover = rendered.match(/\{\{(?:prompt|slot):[\w-]+\}\}/);
+  if (leftover) throw new Error(`agents/backends/dsh/agent.cordis.yml left '${leftover[0]}' unfilled`);
+  return rendered;
+}
+
 /** Native OpenCode target: core config plus native agents/ subagents. When a
  *  user-level omos install is detected, installs the omos way instead —
  *  native agents would conflict with omos-provided agents. scope = {root,
@@ -417,6 +495,32 @@ function applyZcode(opts, counts) {
 }
 
 /**
+ * DSH target: installs ONLY at user level — the agent preset in
+ * <DSH_HOME>/.agent-presets/<id>/: preset.yml display metadata plus the
+ * rendered agent.cordis.yml (orchestrator persona + one named delegation tool
+ * per specialist prompt). Opt-in via --dsh; never touches the project
+ * directory, no downloads. DSH reads a preset when a session mounts it, so a
+ * new session picks the change up. Destinations are displayed relative to the
+ * home directory ("~/") when the DSH home sits inside it.
+ */
+function applyDsh(opts, counts) {
+  const home = dshHome();
+  const presetRoot = join(home, ".agent-presets", DSH_PRESET_ID);
+  const outsideHome = relative(homedir(), resolve(home));
+  // A relocated DSH home (DSH_HOME outside the user's home) is displayed as the
+  // absolute path it is; the default layout displays relative to home.
+  const userLevel = outsideHome === "" || (!outsideHome.startsWith("..") && !isAbsolute(outsideHome));
+  const display = userLevel ? { ...opts, displayRoot: homedir(), displayPrefix: "~/" } : opts;
+  const shown = userLevel ? `~/${relative(homedir(), presetRoot).split(sep).join("/")}` : presetRoot;
+  const usedSlots = new Set();
+  console.log(`\n${shown}/  (user-level: preset.yml, agent.cordis.yml)`);
+  copyOne(join(PKG_ROOT, "agents", "backends", "dsh", "preset.yml"), join(presetRoot, "preset.yml"), display, counts);
+  writeAgent(join(presetRoot, "agent.cordis.yml"), renderDshComposition(usedSlots), display, counts);
+  warnUnusedSlots("dsh", usedSlots);
+  console.log(`  note       DSH reads presets at session start: open a new session and pick this preset`);
+}
+
+/**
  * Sync the distributable OpenCode assets from agents/backends/{opencode,omos}/
  * into this repository's live .opencode/ directory (this repo self-hosts omos).
  * In check mode, only reports drift.
@@ -451,7 +555,8 @@ function syncOpencodeAssets({ check }) {
 /**
  * `my-workbench assemble`: regenerate this repository's generated config from
  * the single-source agents/ tree: `.claude/agents/` (claude backend) and
- * `.opencode/` (opencode + omos backend assets). `--check` only verifies.
+ * `.opencode/` (opencode + omos backend assets), and render the user-level dsh
+ * composition so a broken placeholder fails here. `--check` only verifies.
  */
 function assembleCommand({ check }) {
   const outDir = join(PKG_ROOT, BACKENDS.claude);
@@ -478,10 +583,24 @@ function assembleCommand({ check }) {
 
   outdated += syncOpencodeAssets({ check });
 
+  // The DSH preset installs at user level, so no generated file lives in this
+  // repository to regenerate or compare. Render the composition anyway: an
+  // unresolved {{prompt:...}}/{{slot:...}} or a prompt this tree no longer has
+  // fails here instead of at install time.
+  const dshSlots = new Set();
+  try {
+    const rendered = renderDshComposition(dshSlots);
+    if (!check) console.log(`rendered: agents/backends/dsh/agent.cordis.yml (${rendered.length} bytes)`);
+    warnUnusedSlots("dsh", dshSlots);
+  } catch (err) {
+    console.log(`${check ? "check FAILED" : "error"}: agents/backends/dsh/: ${err.message}`);
+    outdated++;
+  }
+
   if (check) {
-    if (outdated === 0) console.log("check OK: .claude/agents/ and .opencode/ match agents/ source");
+    if (outdated === 0) console.log("check OK: .claude/agents/ and .opencode/ match agents/ source; the dsh composition renders");
     else {
-      console.log(`check FAILED: ${outdated} file(s) outdated; run "my-workbench assemble" to regenerate`);
+      console.log(`check FAILED: ${outdated} file(s) outdated or unrenderable; run "my-workbench assemble" to regenerate`);
       process.exitCode = 1;
     }
   }
@@ -507,7 +626,8 @@ async function main() {
 
   // Prerequisite gate: fail fast with no writes. --omos demands an existing
   // user-level omos install because the plugin loads from there — my-workbench
-  // never pins a plugin entry and never downloads anything.
+  // never pins a plugin entry and never downloads anything. --dsh demands an
+  // existing DSH home, because that is where the preset registry reads presets.
   const prereqFailures = [];
   if (opts.targets.has("opencode") && !opencodeInstalled()) {
     prereqFailures.push("OpenCode is not installed (no 'opencode' on PATH); install OpenCode first");
@@ -515,6 +635,9 @@ async function main() {
   if (opts.targets.has("omos")) {
     if (!opencodeInstalled()) prereqFailures.push("OpenCode is not installed (no 'opencode' on PATH); install OpenCode first");
     if (!omosUserLevelPresent()) prereqFailures.push("omos is not installed at user level (~/.config/opencode); install omos first, then rerun with --omos");
+  }
+  if (opts.targets.has("dsh") && !existsSync(dshHome())) {
+    prereqFailures.push(`DSH is not installed (no ${dshHome()}); install DeepSeek Harness first, then rerun with --dsh`);
   }
   if (prereqFailures.length > 0) {
     for (const failure of prereqFailures) console.error(`error: ${failure}`);
@@ -552,11 +675,15 @@ async function main() {
   const displayOpts = opts.user ? { ...opts, displayRoot: homedir(), displayPrefix: "~/" } : opts;
 
   const counts = { created: 0, overwritten: 0, skipped: 0 };
-  const zcodeOnly = opts.targets.size === 1 && opts.targets.has("zcode");
+  // ZCode and DSH are user-level-only targets with no project footprint; a run
+  // that selects only those reports itself as a user-level install.
+  const projectTargets = ["opencode", "omos", "claude"].filter((name) => opts.targets.has(name));
+  const userLevelLabels = { zcode: "ZCode", dsh: "DSH" };
+  const userLevelOnly = Object.keys(userLevelLabels).filter((name) => opts.targets.has(name));
   const dry = opts.dryRun ? "  (dry-run)" : "";
   console.log(
-    zcodeOnly
-      ? `my-workbench: installing ZCode agent setup into ~/.zcode (user-level)${dry}`
+    projectTargets.length === 0
+      ? `my-workbench: installing ${userLevelOnly.map((name) => userLevelLabels[name]).join(" + ")} agent setup (user-level)${dry}`
       : opts.user
         ? `my-workbench: installing agent setup at user level (~/.config/opencode, ~/.claude)${dry}`
         : `my-workbench: installing agent setup into ${targetRoot}${dry}`,
@@ -570,14 +697,21 @@ async function main() {
     assembleBackend("claude", join(scopes.claude.root, scopes.claude.dest, "agents"), displayOpts, counts);
   }
   if (opts.targets.has("zcode")) applyZcode(opts, counts);
+  if (opts.targets.has("dsh")) applyDsh(opts, counts);
 
   console.log(`\ndone: ${counts.created} created, ${counts.overwritten} overwritten, ${counts.skipped} skipped.`);
   if (counts.created > 0 && !opts.dryRun) {
-    console.log(
-      opts.user
-        ? "next: restart OpenCode / Claude Code so the user-level config is picked up."
-        : "next: restart OpenCode / Claude Code / ZCode so the new config is picked up, then commit the copied files.",
-    );
+    // Each target picks its own config up differently; project targets are the
+    // only ones with files to commit.
+    if (projectTargets.length > 0) {
+      console.log(
+        opts.user
+          ? "next: restart OpenCode / Claude Code so the user-level config is picked up."
+          : "next: restart OpenCode / Claude Code so the new config is picked up, then commit the copied files.",
+      );
+    }
+    if (opts.targets.has("zcode")) console.log("next: restart ZCode sessions to pick up the new AGENTS.md and subagents.");
+    if (opts.targets.has("dsh")) console.log("next: open a new DSH session and pick the installed preset (DSH reads presets at session start).");
   }
 }
 

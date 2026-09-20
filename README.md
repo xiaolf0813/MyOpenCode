@@ -2,7 +2,7 @@
 
 English | [简体中文](README_CN.md)
 
-Portable [OpenCode](https://opencode.ai) + Claude Code + ZCode agent setup, installed into your project (or at user level with `--user`; ZCode is always user-level) with one command.
+Portable [OpenCode](https://opencode.ai) + Claude Code + ZCode + DeepSeek Harness agent setup, installed into your project (or at user level with `--user`; ZCode and DSH are always user-level) with one command.
 
 ```bash
 npx my-workbench
@@ -13,6 +13,7 @@ npx my-workbench
 - **`.opencode/`** — OpenCode core config and native `.opencode/agents/` subagents: eight specialized agents — `orchestrator`, `explorer`, `librarian`, `oracle`, `ui-designer`, `fixer`, `observer`, `improver`. Add the separate `--omos` target on top for the [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) plugin scheme (short name: **omos**): multi-model council presets and prompt overrides.
 - **`.claude/`** — the same specialists as native Claude Code subagents (`.claude/agents/*.md`). omos-agnostic: installed identically in every target.
 - **`~/.zcode/`** — opt-in ZCode support (`--zcode`): user-level global instructions plus the specialist subagents as ZCode user agents (`~/.zcode/agents/*.md`). Nothing is written inside the project.
+- **`~/.dsh/`** — opt-in DeepSeek Harness support (`--dsh`): one agent preset under `<DSH_HOME>/.agent-presets/my-workbench/` — the orchestrator prompt as the preset persona, plus one named delegation tool per specialist. Nothing is written inside the project.
 
 ## OpenCode targets: native or omos
 
@@ -34,6 +35,7 @@ npx my-workbench --user             # user-level install: ~/.config/opencode/ + 
 npx my-workbench --force            # overwrite files that already exist
 npx my-workbench --dry-run          # preview without writing
 npx my-workbench --zcode            # ZCode user-level setup only (~/.zcode)
+npx my-workbench --dsh              # DSH agent preset only (~/.dsh)
 npx my-workbench assemble [--check] # in this repo: regenerate .claude/agents/ and .opencode/
 ```
 
@@ -50,6 +52,16 @@ Existing files are skipped unless `--force` is given, so re-running is safe.
 - The global file is composed from `agents/backends/zcode/AGENTS.md` (platform notes) plus `agents/prompts/orchestrator.md` — the orchestrator prompt drives the main agent.
 - Subagents run with `injectAgentsMd: false`: the global file is not injected into them, so every delegation brief must carry full context.
 - Opt-in only (`--zcode` or `zcode`) — the default targets remain `.opencode/` + `.claude/`. No omos, nothing downloaded. Existing files are skipped unless `--force`. Restart ZCode sessions to pick up changes.
+
+## DSH target
+
+`npx my-workbench --dsh` installs one [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) **agent preset** at user level: `<DSH_HOME>/.agent-presets/my-workbench/` (`DSH_HOME`, else `~/.dsh`). DSH reads presets from its home, so there is nothing to install inside a project.
+
+- `preset.yml` — display name and description for the preset picker.
+- `agent.cordis.yml` — the composition: the orchestrator prompt as the preset's persona, the full standard tool set, and one `@deepseek-ai/dsh-tool-subagent` row per specialist.
+- Each specialist row carries that specialist's prompt as its child persona and restricts the child's tools the way the prompt does: read-only lanes lose `write`/`edit`, `observer` and `improver` also lose the shell, and every lane loses the delegation tools, so lanes cannot spawn lanes.
+- Delegation is native. The model calls `subagent_explorer`, `subagent_librarian`, `subagent_oracle`, `subagent_ui_designer`, `subagent_fixer`, `subagent_observer`, or `subagent_improver` instead of naming a subagent type in a Task tool. Lanes run in the background by default and answer with a durable child id, which `send_message` continues — that is the session handle the orchestrator prompt talks about.
+- Opt-in only (`--dsh` or `dsh`) — the default targets remain `.opencode/` + `.claude/`. It requires an existing DSH home, downloads nothing, and skips existing files unless `--force`. Open a new DSH session to pick the preset up. Lanes inherit the orchestrator's model route unless you pin `agentOptions` on a row (the installed file documents where).
 
 ## Single source, assembled output
 
@@ -71,13 +83,17 @@ agents/
     │   ├── oh-my-opencode-slim.jsonc       # omos project config
     │   ├── oh-my-opencode-slim/  # prompt overrides (<agent>_append.md)
     │   └── package.json          # plugin node dependencies
-    └── zcode/
-        ├── AGENTS.md       # global-file header, composed with prompts/orchestrator.md
-        ├── agents.json     # per-agent frontmatter fields (description/model/injectAgentsMd)
-        └── slots/          # dispatch.md (every backend has it; not enumerated here)
+    ├── zcode/
+    │   ├── AGENTS.md       # global-file header, composed with prompts/orchestrator.md
+    │   ├── agents.json     # per-agent frontmatter fields (description/model/injectAgentsMd)
+    │   └── slots/          # dispatch.md (every backend has it; not enumerated here)
+    └── dsh/
+        ├── agent.cordis.yml  # preset composition; {{prompt:<agent>}} embeds prompts/<agent>.md
+        ├── preset.yml        # preset display metadata (name/description)
+        └── slots/            # dispatch.md ({{slot:dispatch}} inside the orchestrator prompt)
 ```
 
-In your project, `.claude/agents/` and `.opencode/` are assembled from it. Edit `agents/`, then run `npx my-workbench assemble` (`--check` detects drift) — the same workflow works in this repository and in any target project. Prompt bodies may reference `{{slot:<name>}}` placeholders; each backend supplies their text in `agents/backends/<backend>/slots/`, and a slot referenced by a prompt but missing for a backend fails assembly.
+In your project, `.claude/agents/` and `.opencode/` are assembled from it. Edit `agents/`, then run `npx my-workbench assemble` (`--check` detects drift) — the same workflow works in this repository and in any target project. Prompt bodies may reference `{{slot:<name>}}` placeholders; each backend supplies their text in `agents/backends/<backend>/slots/`, and a slot referenced by a prompt but missing for a backend fails assembly. A backend template — `agents/backends/dsh/agent.cordis.yml` — may also reference `{{prompt:<agent>}}`, which embeds that whole prompt body in place instead of duplicating it; `assemble --check` renders the DSH composition so a placeholder this tree can no longer resolve fails the check rather than the install.
 
 ## Attribution
 
