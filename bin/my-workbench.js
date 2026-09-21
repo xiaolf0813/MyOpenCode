@@ -1026,10 +1026,15 @@ function laneUiPatchBlock(rowName) {
 
 /**
  * Maintain the managed block in one profile's user patch layer: replace it in
- * place when the markers are already there, append it otherwise. Content outside
- * the markers — the user's own rows and comments — is never touched or reordered.
+ * place when the markers are already there, add it otherwise — as one more item
+ * when the file is a plain block sequence, as the whole list when the file is
+ * empty, comments only, or a flow empty list (`[]`, the DSH factory default: a
+ * top-level array cannot continue with an appended item). Content outside the
+ * markers — the user's own rows and comments — is never touched or reordered,
+ * and a file of any other shape is left alone for the caller to report:
+ * appending there would corrupt it.
  *
- * @returns {"unchanged" | "added" | "updated" | "written-dry"} what happened (or would).
+ * @returns {"unchanged" | "added" | "updated" | "written-dry" | "skipped"} what happened (or would).
  */
 function writeLaneUiPatchRow(profileDir, rowName, opts) {
   const file = join(profileDir, PROFILE_PATCH_FILENAME);
@@ -1049,12 +1054,30 @@ function writeLaneUiPatchRow(profileDir, rowName, opts) {
     next = `${block}\n`;
     outcome = "added";
   } else {
-    const separator = existing === "" || existing.endsWith("\n\n") ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
-    next = `${existing}${separator}${block}\n`;
-    outcome = "added";
+    const meaningful = existing
+      .split("\n")
+      .filter((line) => !/^\s*#/.test(line) && !/^\s*---\s*$/.test(line))
+      .join("\n")
+      .trim();
+    if (meaningful === "[]") {
+      const withoutEmptyList = existing
+        .split("\n")
+        .filter((line) => line.trim() !== "[]")
+        .join("\n");
+      const separator =
+        withoutEmptyList.trim() === "" || withoutEmptyList.endsWith("\n\n") ? "" : withoutEmptyList.endsWith("\n") ? "\n" : "\n\n";
+      next = `${withoutEmptyList}${separator}${block}\n`;
+      outcome = "added";
+    } else if (meaningful === "" || meaningful.startsWith("-")) {
+      const separator = existing === "" || existing.endsWith("\n\n") ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+      next = `${existing}${separator}${block}\n`;
+      outcome = "added";
+    } else {
+      outcome = "skipped";
+    }
   }
 
-  if (outcome === "unchanged") return outcome;
+  if (outcome === "unchanged" || outcome === "skipped") return outcome;
   if (opts.dryRun) return "written-dry";
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, next);
@@ -1179,19 +1202,27 @@ function applyDsh(opts, counts) {
     const patchExisted = existsSync(patchFile);
     const outcome = writeLaneUiPatchRow(profile.dir, rowName, opts);
     const where = userLevel ? `~/${relative(homedir(), profile.dir)}/${PROFILE_PATCH_FILENAME}` : patchFile;
-    const label =
-      outcome === "unchanged"
-        ? "skip     "
-        : outcome === "written-dry"
-          ? "dry-run  "
-          : outcome === "updated"
-            ? "overwrite"
-            : patchExisted
-              ? "append   "
-              : "create   ";
-    console.log(`  ${label}  ${where}${opts.dryRun ? "  (dry-run)" : ""}`);
-    console.log(`  note       one inert UI row; no tools, no packages installed`);
-    if (outcome === "unchanged") console.log(`  note       the managed block was already current (idempotent)`);
+    if (outcome === "skipped") {
+      console.warn(`  warn       ${where} is not a plain patch list; the managed row was NOT written (appending there would corrupt the file)`);
+      console.log(`  note       add this row to it by hand to get the page:`);
+      console.log(`             - insert:`);
+      console.log(`                 - id: my-workbench-lanes-ui`);
+      console.log(`                   name: '${rowName}'`);
+    } else {
+      const label =
+        outcome === "unchanged"
+          ? "skip     "
+          : outcome === "written-dry"
+            ? "dry-run  "
+            : outcome === "updated"
+              ? "overwrite"
+              : patchExisted
+                ? "append   "
+                : "create   ";
+      console.log(`  ${label}  ${where}${opts.dryRun ? "  (dry-run)" : ""}`);
+      console.log(`  note       one inert UI row; no tools, no packages installed`);
+      if (outcome === "unchanged") console.log(`  note       the managed block was already current (idempotent)`);
+    }
   }
   console.log(`  note       DSH reads presets at session start: open a new session and pick this preset`);
 }
