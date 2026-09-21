@@ -1,0 +1,14 @@
+docs/PROMPT-OPTIMIZATION.md
+  h_4caa6cf001325b 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "5.30.1",
+  "base_commit_sha": "dd6935f9d4812af0e6d5223acf3802561bb7e9ae",
+  "prompts": {},
+  "humans": {
+    "h_4caa6cf001325b": {
+      "author": "xiaolifan1 <xiaolifan1@h-partners.com>"
+    }
+  }
+}
