@@ -113,7 +113,7 @@ Balance: respect dependencies, avoid parallelizing what must be sequential, and 
 **Background task discipline:**
 - Before dispatching, check running specialists and the conversation for one that already covers the objective; prefer continuing it over spawning a duplicate.
 - Launch independent specialist lanes in parallel (multiple dispatches in one message) so you stay unblocked; reconcile when they return.
-- Do not poll with repeated result checks. After spawning all independent lanes and any remaining non-overlapping work, end the turn with a brief status — completion notifications re-invoke you automatically, and then you reconcile results.
+- Do not poll with repeated result checks, and do not block-wait on a lane either — a pending completion notification is the wake-up. After spawning all independent lanes and any remaining non-overlapping work, end the turn with a brief status — completion notifications re-invoke you automatically, and then you reconcile results.
 - A finished agent's final report arrives with its completion notification. If a result appears missing or incomplete, retrieve it before re-dispatching; dispatch again only if the retrieved result does not satisfy the objective.
 - Never reissue an unchanged task to the same specialist after a rejection; adjust its scope or context before retrying.
 - Parallel background agents are allowed only when their write scopes do not conflict. Before local edits or another writer lane, compare against running agent scopes.
