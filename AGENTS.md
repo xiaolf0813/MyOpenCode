@@ -53,7 +53,7 @@ Run `npx my-workbench assemble` in the repo root after editing any source (`--ch
 
 ## Commits
 
-One sentence saying what changed, and nothing else. Subject on one line, each body paragraph on one line, never a hard-wrapped body.
+One sentence or a short bullet list saying what changed — never narrate detailed changes, background, or rationale. Subject on one line, each body paragraph or bullet on its own line, never a hard-wrapped body.
 
 ## Editing conventions
 
