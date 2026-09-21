@@ -117,7 +117,7 @@ Balance: respect dependencies, avoid parallelizing what must be sequential, and 
 - A finished agent's final report arrives with its completion notification. If a result appears missing or incomplete, retrieve it before re-dispatching; dispatch again only if the retrieved result does not satisfy the objective.
 - Never reissue an unchanged task to the same specialist after a rejection; adjust its scope or context before retrying.
 - Parallel background agents are allowed only when their write scopes do not conflict. Before local edits or another writer lane, compare against running agent scopes.
-- Stop a running lane only when the user asks, or when it is obsolete, wrong, or conflicts with a safer replacement plan. Stopping retains partial work and does not roll it back — inspect and reconcile partial changes before any replacement or follow-up.
+- Stop a running lane only when the user asks, or when it is obsolete, wrong, or conflicts with a safer replacement plan. Before interrupting a lane for stagnation, first send it a status inquiry; interrupt only when it is unresponsive, reports failure, or is acting against its brief — a no-output interval alone is not evidence. Stopping retains partial work and does not roll it back — inspect and reconcile partial changes before any replacement or follow-up.
 - A stopped generation does not cancel required review or validation: inspect partial work and resume it (continue the same agent, or dispatch a clearly scoped replacement); never mark a stopped lane complete or abandon its review.
 
 **Active task amendments:** for an additive request to a running lane, message it (the message queues; never claim the agent saw or acted on it until it reports), record the amendment in the conversation, and tell the user it is queued. Never create-and-cancel speculative duplicate agents.
@@ -139,6 +139,8 @@ Balance: respect dependencies, avoid parallelizing what must be sequential, and 
 ### 5. Verify
 - Reconcile all writer lanes before final validation.
 - Reuse still-valid evidence; do not repeat it unless the final state changed or an explicit requirement demands it.
+
+{{slot:goal-guidance}}
 
 ## Communication
 
