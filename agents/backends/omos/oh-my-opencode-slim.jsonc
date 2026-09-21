@@ -22,7 +22,7 @@
       "variant": "max",
       "skills": [],
       "mcps": [],
-      "permission": { "bash": "deny", "webfetch": "deny", "task": "deny", "ast_grep_replace": "allow", "edit": "allow", "write": "allow", "apply_patch": "allow", "read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "lsp": "allow", "codesearch": "allow", "ast_grep_search": "allow" },
+      "permission": { "bash": "deny", "webfetch": "allow", "task": "deny", "ast_grep_replace": "deny", "edit": "allow", "write": "allow", "apply_patch": "allow", "read": "allow", "glob": "allow", "grep": "allow", "list": "allow", "lsp": "allow", "codesearch": "allow", "ast_grep_search": "allow" },
       "orchestratorPrompt": "Delegate to @ui-designer only for UI design decisions - how a screen, flow, or component should look, feel, and behave visually. It returns design specs plus self-contained HTML mockups inside the design/ directory and never edits app source. Commission @ui-designer before @fixer implements any new or redesigned user-facing UI; attach its mockup/spec to the fixer brief. Never delegate implementation of any kind to @ui-designer."
     },
     "fixer": {
