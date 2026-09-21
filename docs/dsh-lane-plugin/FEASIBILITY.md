@@ -1,15 +1,17 @@
 # Feasibility: a packaged MyWorkbench lane plugin (model + reasoning effort per specialist)
 
-Read-only investigation of the **installed** deployment on 2026-09-20. No process was restarted, no installer was run, nothing under `C:\Users\xiaolf\.dsh` was modified.
+Read-only investigation of the **installed** deployment on 2026-09-20. No process was restarted, no installer was run, nothing under the DSH home was modified.
 
 ## Evidence base (path shorthands)
 
-| Shorthand | Absolute path |
+Paths are given as placeholders, not as they read on the machine this was investigated on: the deployment is wherever the reader's `dsh` install and DSH home happen to live, and the citations stay true across them.
+
+| Shorthand | Path |
 | --- | --- |
-| `nm/` | `D:\Programs\node_global\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\` |
-| `dsh/` | `D:\Programs\node_global\node_modules\@deepseek-ai\dsh\` |
-| `profile/` | `C:\Users\xiaolf\.dsh\profiles\web\` |
-| `DSH_HOME/` | `C:\Users\xiaolf\.dsh\` |
+| `nm/` | `<dsh install>/node_modules/@deepseek-ai/` — the harness packages nested in the launcher's own install |
+| `dsh/` | `<dsh install>/` — the package root `nm/` hangs under |
+| `profile/` | `<DSH_HOME>/profiles/<profile>/` |
+| `DSH_HOME/` | the DSH home (`$DSH_HOME`, else `~/.dsh`) |
 
 Installed versions: DSH packages `0.1.5-rc.2` (`nm/dsh-tool-jobs/package.json:5`), `@deepseek-ai/cordis-plugin-loader` `1.0.3`, `@deepseek-ai/schemastery` `3.18.2`. `cordis-plugin-loader` and `cordis-plugin-include` ship readable **TypeScript source** under `src/`; other packages ship bundler output under `lib/` that keeps comments and line structure.
 
@@ -69,7 +71,7 @@ Installed versions: DSH packages `0.1.5-rc.2` (`nm/dsh-tool-jobs/package.json:5`
 
 3. **Index injection.** `nm/dsh-client-modules/lib/index.js:489-491` `ctx.on("webserver/index-inject", (table) => { table.push(...bootInjections(this.composed)) })`; `:426-430` pushes `{ kind: "global", name: "__DSH_BOOT__", value: graph }`, preceded by the inline queue facade at `:388-409` (`window.__ModuleLoader__={mode:"queue",…}`).
 
-4. **No transform — the file is served verbatim.** `nm/dsh-client-modules/lib/index.js:292-293` `const bundle = \`${prepared.source};\n\`;` … `source += bundle;` — pure string concatenation of file bytes; `:208-212` strips only the `sourceMappingURL`/`sourceURL` trailers. There is **no bundler in this deployment**: `esbuild`, `vite`, `rollup`, `tsdown` and `webpack` are all absent from both `D:\Programs\node_global\node_modules` and the harness's own `node_modules` (verified by directory enumeration). A sourcemap is optional: `nm/dsh-client-modules/lib/index.js:223` — "Parse an optional source-map artifact; missing maps do not prevent plugin execution" — with the `ENOENT` early return at `:229` and the tolerant wrapper at `:765-772`.
+4. **No transform — the file is served verbatim.** `nm/dsh-client-modules/lib/index.js:292-293` `const bundle = \`${prepared.source};\n\`;` … `source += bundle;` — pure string concatenation of file bytes; `:208-212` strips only the `sourceMappingURL`/`sourceURL` trailers. There is **no bundler in this deployment**: `esbuild`, `vite`, `rollup`, `tsdown` and `webpack` are all absent from both the launcher's own `node_modules` and the harness's own (verified by directory enumeration). A sourcemap is optional: `nm/dsh-client-modules/lib/index.js:223` — "Parse an optional source-map artifact; missing maps do not prevent plugin execution" — with the `ENOENT` early return at `:229` and the tolerant wrapper at `:765-772`.
 
 5. **Authoring format — a classic script, not ESM.**
    - `nm/dsh-client-ui-agent-preset/lib/client.js:1-3` `window.__ModuleLoader__.load({` / `id: "@deepseek-ai/dsh-client-ui-agent-preset",` / `factory: (require) => {`
@@ -122,7 +124,7 @@ Two different resolvers are in play, and the preset uses the stricter one.
 
 **Consequence, with the on-disk anchors that make it work:**
 
-- `DSH_HOME/profiles/node_modules/@deepseek-ai/` holds **250 junctions into the harness install** — e.g. `DSH_HOME/profiles/node_modules/@deepseek-ai/dsh-tool-subagent` is a Junction whose target is `D:\Programs\node_global\…\node_modules\@deepseek-ai\dsh-tool-subagent`. This is the "dependency closure" anchor (`nm/dsh-app-boot/lib/index.js:301-306`, `:449`). The same comment states the two-anchor rule directly: "Module resolution is two-anchor by construction: a bundle name resolves first from the dsh installation (the launcher's own package), then from the profile directory. Pnpm-managed entries in the profile's `node_modules` resolve first." (`:301-304`), and "`$DSH_HOME/profiles/node_modules` supplies the installation dependency closure through Node's ordinary parent-walk" (`:305-306`).
+- `DSH_HOME/profiles/node_modules/@deepseek-ai/` holds **250 junctions into the harness install** — e.g. `DSH_HOME/profiles/node_modules/@deepseek-ai/dsh-tool-subagent` is a Junction whose target is the launcher's own `node_modules/@deepseek-ai/dsh-tool-subagent`. This is the "dependency closure" anchor (`nm/dsh-app-boot/lib/index.js:301-306`, `:449`). The same comment states the two-anchor rule directly: "Module resolution is two-anchor by construction: a bundle name resolves first from the dsh installation (the launcher's own package), then from the profile directory. Pnpm-managed entries in the profile's `node_modules` resolve first." (`:301-304`), and "`$DSH_HOME/profiles/node_modules` supplies the installation dependency closure through Node's ordinary parent-walk" (`:305-306`).
 - `profile/node_modules/@deepseek-ai/` holds only `cosmokit`, `dsh-client-ui-primitives`, `schemastery` — the pnpm-managed first anchor (`nm/dsh-app-boot/lib/index.js:827`).
 - `profile/.dsh-module-fallback/node_modules/` exists and is profile-owned.
 
@@ -223,7 +225,7 @@ The one hard requirement this creates: **the plugin must register exactly the na
 
 **Two row forms work; they differ in what must be installed.**
 
-**Form R (relative / plugin inside the preset directory) — no install at all.** `name: ./lane-plugin/src/index.js` is classified `preset` (`nm/dsh-agent-presets/lib/index.js:140-143`) and imported via `super.import`, i.e. against the tree's `baseUrl`, which `Include` set to the composition's own directory (`nm/cordis-plugin-include/lib/index.js:138`; doc at `nm/dsh-agent-presets/lib/index.js:112` — "A preset composition is read by `Include`, which rewrites its context's `baseUrl` to the composition's own directory"). This resolves to `DSH_HOME/.agent-presets/my-workbench/lane-plugin/src/index.js`. Nothing is installed, nothing under the profile is touched, and the plugin travels with the preset. *Open item:* a plugin loaded this way cannot `import '@deepseek-ai/schemastery'` by bare name — Node's walk from `DSH_HOME/.agent-presets/my-workbench/` reaches `.agent-presets/node_modules`, `DSH_HOME/node_modules` (does not exist), `C:\Users\xiaolf\node_modules`, `C:\node_modules` — none of which hold it. Form R therefore needs a **preset-local dependency link** (see PLAN.md) or an absolute `file:` import.
+**Form R (relative / plugin inside the preset directory) — no install at all.** `name: ./lane-plugin/src/index.js` is classified `preset` (`nm/dsh-agent-presets/lib/index.js:140-143`) and imported via `super.import`, i.e. against the tree's `baseUrl`, which `Include` set to the composition's own directory (`nm/cordis-plugin-include/lib/index.js:138`; doc at `nm/dsh-agent-presets/lib/index.js:112` — "A preset composition is read by `Include`, which rewrites its context's `baseUrl` to the composition's own directory"). This resolves to `DSH_HOME/.agent-presets/my-workbench/lane-plugin/src/index.js`. Nothing is installed, nothing under the profile is touched, and the plugin travels with the preset. *Open item:* a plugin loaded this way cannot `import '@deepseek-ai/schemastery'` by bare name — Node's walk from `DSH_HOME/.agent-presets/my-workbench/` reaches `.agent-presets/node_modules`, `DSH_HOME/node_modules` (does not exist), the home directory's `node_modules`, then the filesystem root's — none of which hold it. Form R therefore needs a **preset-local dependency link** (see PLAN.md) or an absolute `file:` import.
 
 **Form P (package name / installed into the profile) — a dependency install, no row.** `name: my-workbench-lanes` is classified `package` and imported from `harnessBase` (`nm/dsh-agent-presets/lib/index.js:665-676`). The anchors reachable from the profile side are the pnpm-managed `profile/node_modules` and the 250-junction `DSH_HOME/profiles/node_modules` (`nm/dsh-app-boot/lib/index.js:301-306`, `:449`, `:827`), both of which contain the shipped `@deepseek-ai/*` closure. Installing the package with `dsh plugin --profile web add <abs path>` puts it in `profile/node_modules` and adds a `dependencies` entry to `profile/package.json` plus `profile/pnpm-lock.yaml` — **but adds no row anywhere**, so no other preset and no other surface mounts it. This is the "minimal install that does not create a profile-level row". *Residual uncertainty:* the exact value of `harnessBase` (profile directory vs. a path inside the harness install) could not be determined without executing. Both candidates resolve the shipped `@deepseek-ai/*` names; only the profile-side candidate resolves a newly installed package. Form R does not have this uncertainty.
 

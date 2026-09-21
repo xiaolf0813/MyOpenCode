@@ -213,7 +213,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'   // nm/dsh-tool-jobs/lib/in
 import z from '@deepseek-ai/schemastery'              // nm/dsh-tool-jobs/lib/index.js:1
 ```
 
-A plugin at `<preset dir>/lane-plugin/src/index.js` cannot reach either: Node's upward walk goes to `.agent-presets/node_modules`, `DSH_HOME/node_modules` (does not exist — verified), `C:\Users\xiaolf\node_modules`, `C:\node_modules`.
+A plugin at `<preset dir>/lane-plugin/src/index.js` cannot reach either: Node's upward walk goes to `.agent-presets/node_modules`, `DSH_HOME/node_modules` (does not exist — verified), the home directory's `node_modules`, then the filesystem root's.
 
 **As shipped, the CLI bakes absolute `file:` URLs.** The host module carries two `{{dep:<alias>}}` placeholders (declared in `DSH_LANE_PLUGIN_DEPS`, `bin/my-workbench.js`), and `--dsh` replaces each with the resolved entry URL of the deployment's own copy:
 
@@ -354,7 +354,7 @@ Nothing below was executed in this phase (no DSH restart, no installer, no write
 
 ```powershell
 # 1. In the repository: render + install the preset (the plugin ships inside it)
-cd D:\Users\xiaolf\WorkSpace\my-workbench
+cd <repo>                                      # the my-workbench checkout
 node bin/my-workbench.js assemble --check      # must pass
 npx my-workbench --dsh --force                 # rewrites .agent-presets\my-workbench\ (plugin included)
 
@@ -381,7 +381,7 @@ Then **start a new DSH session** on the MyWorkbench preset — presets are read 
 3. No `my-workbench-lanes: lane "…" has no persona` warnings: that warning means `src/prompts.generated.js` was not rendered or not shipped (§3).
 4. `settings → MyWorkbench 赛道模型` shows seven lanes with a model select and an effort select; the effort options come from `session.modelCatalog()`.
 5. Pin `oracle` to a route + effort, run a delegation, and check the child's session log: its first `request/header` should carry the pinned provider/model/effort (this is exactly how the prototype was validated).
-6. Restart DSH and re-open the page: the pins are still there and present under `my-workbench-lanes:` in `C:\Users\xiaolf\.dsh\settings.yaml`.
+6. Restart DSH and re-open the page: the pins are still there and present under `my-workbench-lanes:` in `~/.dsh/settings.yaml`.
 7. A read-only lane that tries to write must be refused (`write`/`edit` denied), and a lane must be unable to delegate (`subagent_*` denied in its scope). If a spawn instead fails with `tools.restrict() names unknown global tool …`, the plugin's tool names and its deny lists have drifted apart (§8).
 8. Open settings in a `standard` session: the section shows the inert placeholder (§7), not live controls.
 
@@ -392,12 +392,12 @@ Fully contained — nothing at profile level was changed:
 ```powershell
 Remove-Item -Recurse -Force "$env:USERPROFILE\.dsh\.agent-presets\my-workbench\lane-plugin"
 # then re-install the previous composition (or the whole preset) from a checkout at the previous commit:
-cd D:\Users\xiaolf\WorkSpace\my-workbench
+cd <repo>                                      # the my-workbench checkout
 git stash list   # nothing was committed by this work
 npx my-workbench --dsh --force
 ```
 
-Optionally delete the `my-workbench-lanes:` block from `C:\Users\xiaolf\.dsh\settings.yaml` to forget the pins; leaving it is harmless (an unregistered namespace is simply not read).
+Optionally delete the `my-workbench-lanes:` block from `<DSH_HOME>/settings.yaml` to forget the pins; leaving it is harmless (an unregistered namespace is simply not read).
 
 ### Fallback form P, if the relative row name proves unusable
 
@@ -441,4 +441,4 @@ One decision this plan did **not** settle, resolved during implementation:
 ## 12. Not covered by this plan
 
 - `agents/prompts_cn/*` and the other backends: unaffected, since the lane plugin is a DSH backend artifact only.
-- Deployment of the built plugin into the **real** `C:\Users\xiaolf\.dsh`: the user owns that run (`npx my-workbench --dsh --force`) and the DSH session restart that picks it up.
+- Deployment of the built plugin into the **real** DSH home: the user owns that run (`npx my-workbench --dsh --force`) and the DSH session restart that picks it up.
