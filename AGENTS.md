@@ -51,6 +51,10 @@ Every target downloads nothing and writes nothing inside a project; existing fil
 
 Run `npx my-workbench assemble` in the repo root after editing any source (`--check` verifies without writing).
 
+## Commits
+
+Subject on one line, then one line per body paragraph — never hard-wrap a body.
+
 ## Editing conventions
 
 - **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change update the matching `agents/prompts_cn/<agent>_cn.md` and keep frontmatter in `agents/backends/*/agents.json` in sync; then assemble. Keep the omos attribution notice that opens each adapted body verbatim and first: `stripAttribution()` drops it from every generated prompt by exact match, so an edited or moved notice ships into the delivered text. `agents/prompts/improver.md` is in-house and deliberately carries none — do not add one.
