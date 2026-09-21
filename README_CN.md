@@ -51,7 +51,7 @@ npx my-workbench assemble [--check] # 本仓库内：重新生成 .claude/agents
 
 `npx my-workbench --zcode` 仅在**用户级**安装 ZCode 支持：`~/.zcode/AGENTS.md`（主智能体的全局指令）和 `~/.zcode/agents/*.md`（子智能体）。ZCode 没有可配置的主智能体，也没有项目级子智能体，因此项目内无需安装任何内容。
 
-- 全局文件由 `agents/backends/zcode/AGENTS.md`（平台说明）加 `agents/prompts/orchestrator.md` 组合而成 — orchestrator 提示词驱动主智能体。
+- 全局文件就是 `agents/prompts/orchestrator.md` — orchestrator 提示词驱动主智能体，其中 ZCode 的派发约定由 `agents/backends/zcode/slots/dispatch.md` 填入。
 - 子智能体以 `injectAgentsMd: false` 运行：全局文件不会注入它们，因此每个委派简报必须自带完整上下文。
 - 仅按需启用（`--zcode` 或 `zcode`）— 默认目标仍是 `.opencode/` + `.claude/`。无 omos，不下载任何东西。已存在的文件除非 `--force` 否则跳过。重启 ZCode 会话以生效。
 
@@ -143,7 +143,6 @@ agents/
     │   ├── oh-my-opencode-slim/  # 提示词覆盖（<agent>_append.md）
     │   └── package.json          # 插件 node 依赖
     ├── zcode/
-    │   ├── AGENTS.md       # 全局文件头部，与 prompts/orchestrator.md 组合
     │   ├── agents.json     # 每个智能体的 frontmatter 字段（description/model/injectAgentsMd）
     │   └── slots/          # dispatch.md（每个后端都有，不逐一列出）
     └── dsh/

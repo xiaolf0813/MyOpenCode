@@ -36,7 +36,7 @@
 > preset; the shipped truth is the phase-3 layout, and `../lane-plugin-ui/README.md`
 > documents the footprint, the conditional registration and the rollback.
 
-Companion to `FEASIBILITY.md` (evidence) and `prototype/` (the working dynamic-Cordis prototype). All citations below are `file:line` into the installed deployment, using the same shorthands as `FEASIBILITY.md`: `nm/` = `D:\Programs\node_global\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`, `DSH_HOME/` = `C:\Users\xiaolf\.dsh\`.
+Companion to `FEASIBILITY.md` (evidence). The dynamic-Cordis prototype this plan was proven against, and the follow-up backlog, were both deleted once the packaged form shipped; where the text below still reasons about "the prototype", it refers to that removed dump. All citations below are `file:line` into the installed deployment, using the same shorthands as `FEASIBILITY.md`: `nm/` = the deployment's `@deepseek-ai/dsh/node_modules/@deepseek-ai/`, `DSH_HOME/` = the DSH home (`$DSH_HOME`, else `~/.dsh`).
 
 ## Decision recorded
 
@@ -51,16 +51,19 @@ That this is sufficient is proven by the mount semantics: the preset composition
 Source of truth in this repository (template-only, next to the composition template):
 
 ```
-agents/backends/dsh/lane-plugin/
-  FEASIBILITY.md                 # this investigation
-  PLAN.md                        # this file
-  prototype/                     # the working dynamic-package dump (reference only)
-  host-package/                  # the host half — a real ESM plugin package
-    package.json
-    src/index.js                 # host half; {{dep:<alias>}} -> file: URL at install
-  client-half/
+agents/backends/dsh/
+  agent.cordis.yml               # composition template: persona + ONE row naming the lane plugin
+  preset.yml                     # picker metadata
+  slots/dispatch.md              # the {{slot:dispatch}} text inside the orchestrator prompt
+  lane-plugin/                   # the packaged HOST half (preset row: ./lane-plugin/src/index.js)
+    prompts.template.js          # one {{prompt:<agent>}} per lane -> src/prompts.generated.js
+    host-package/
+      package.json
+      src/index.js               # host half; {{dep:<alias>}} -> file: URL at install
+  lane-plugin-ui/                # the settings PAGE (profile row: file:///…/lane-plugin-ui/src/index.js)
+    package.json                 # exports "./client", dsh.client.platform "web"
+    src/index.js                 # inert host half — registers nothing
     lib/client.js                # hand-written classic-script bundle (no build step)
-  prompts.template.js            # generated data module template, one placeholder per lane
 ```
 
 Installed shape, written by `my-workbench --dsh` — the package directory is copied verbatim, so the repo layout and the installed layout are identical:
@@ -157,7 +160,7 @@ export const LANE_PROMPTS = {
 
 **Alternative considered and rejected:** shipping the seven `*.md` files beside the plugin and reading them with `node:fs` at runtime. It works, but it needs runtime file I/O and a path resolved from `import.meta.url`, and it puts a second copy of the prompt text on disk that `assemble --check` cannot verify.
 
-**Why not keep scraping the installed composition** (what the prototype did, `prototype/host.js:46-110`): it re-parses YAML in the plugin, it silently degrades to "no persona found" when the preset is edited, and it makes the preset the prompt source instead of `agents/prompts/*.md`. The generated module removes all three problems and lets the CLI fail loudly at install time.
+**Why not keep scraping the installed composition** (what the deleted prototype did): it re-parses YAML in the plugin, it silently degrades to "no persona found" when the preset is edited, and it makes the preset the prompt source instead of `agents/prompts/*.md`. The generated module removes all three problems and lets the CLI fail loudly at install time.
 
 ---
 
@@ -194,7 +197,7 @@ Contract facts this relies on:
 
 **Write path from the GUI:** `ctx.remote.settings.update('my-workbench-lanes', patch, revision)` — the generated Remote signature is `update: (ns, patch, expectedRevision) => Promise<RemoteResult<SettingsNamespaceView>>` (`nm/dsh-api-settings-controller/lib/typert.remote-client.d.ts`), host side at `nm/dsh-api-settings-controller/lib/index.js:532-547`, real client usage at `nm/dsh-client-ui-agent-preset/lib/client.js:416-419`. Resetting a lane to *inherit* is a write of `{ provider: '', model: '', reasoningEffort: '' }`, not an `unset` — the schema admits empty strings, which keeps the client on the simpler `update`/`replace` pair.
 
-**No package-private RPC.** The prototype's `host.call('get-state' | 'set-lanes')` (`prototype/host.js:202-210`) exists only for dynamic Cordis packages; a packaged plugin has no such channel. Everything the page needs is already on the shipped wire:
+**No package-private RPC.** The prototype's `host.call('get-state' | 'set-lanes')` exists only for dynamic Cordis packages; a packaged plugin has no such channel. Everything the page needs is already on the shipped wire:
 
 - pins: `ctx.remote.settings.describe()` → `namespaces[].value` + `revision` (`nm/dsh-settings/lib/types/types.d.ts`).
 - model/effort catalog: `ctx.remote.session.modelCatalog()` (`nm/dsh-api-session-controller/lib/typert.remote-client.d.ts:23`), whose `groups[].models[].reasoning.efforts[]` is the per-model effort list (`nm/dsh-api-session-controller/lib/types/types.d.ts`, `ModelReasoning`/`ModelReasoningEffort`). `ctx.remote.llm.listProviders()` returns only `{id, name}` and is **not** a source of models or efforts (`nm/dsh-llm/lib/types/types.d.ts:180-185`).
@@ -269,13 +272,13 @@ window.__ModuleLoader__.load({
 })
 ```
 
-The factory's `require` is answered from a frozen **9-specifier** table — exactly `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-store`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, `@deepseek-ai/dsh-client-ui-dockkit` — verified in the shipped shell bundle `nm/dsh-web-frontend/dist/assets/index-BKQ_L1z6.js:114` (`function by(){return{react:ec,"react/jsx-runtime":ic,…}}`, consumed as `r.create({boot:t.__DSH_BOOT__,staticModules:by(),…})`). Anything else throws (`nm/dsh-client-modules/lib/client.js:308`). `require('react')` + `React.createElement` — what the prototype already does (`prototype/client.js:24`) — stays inside the allowlist; no CSS-in-JS package is needed because the prototype injects a plain `<style>`-equivalent string through the ctx's `styles` helper.
+The factory's `require` is answered from a frozen **9-specifier** table — exactly `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`, `@deepseek-ai/cordis`, `@deepseek-ai/dsh-client-store`, `@deepseek-ai/dsh-client-ui-slots`, `@deepseek-ai/dsh-client-ui-primitives`, `@deepseek-ai/dsh-client-ui-dockkit` — verified in the shipped shell bundle `nm/dsh-web-frontend/dist/assets/index-BKQ_L1z6.js:114` (`function by(){return{react:ec,"react/jsx-runtime":ic,…}}`, consumed as `r.create({boot:t.__DSH_BOOT__,staticModules:by(),…})`). Anything else throws (`nm/dsh-client-modules/lib/client.js:308`). `require('react')` + `React.createElement` — what the prototype already did — stays inside the allowlist; no CSS-in-JS package is needed because the page injects a plain `<style>`-equivalent string through the ctx's `styles` helper.
 
 The registration pattern is the shipped one: `nm/dsh-client-ui-agent-preset/lib/client.js:1519-1526` `ctx.slots.inject("settings.section", () => ctx.slots.register({ name: "settings.section", id: …, order: …, label: … }, Section))`.
 
-The React logic and the recommended mapping port over from `prototype/client.js:25-189`, with these substitutions:
+The React logic and the recommended mapping were ported over from the prototype, with these substitutions:
 
-| Prototype | Packaged form |
+| Prototype | Packaged form (shipped) |
 | --- | --- |
 | `host.call('get-state', …)` / `host.call('set-lanes', …)` | `ctx.remote.settings.describe()` and `ctx.remote.settings.update(ns, patch, revision)` |
 | no catalog channel | `ctx.remote.session.modelCatalog()` for the provider/model/effort options |
@@ -339,7 +342,7 @@ const TOOL_FILTER = {
 
 The platform conditional is now a plain runtime expression evaluated once at registration — strictly safer than the template's `!!js` (`agent.cordis.yml:250`), because it runs in the process that will actually spawn the child, so the deny list can never name the other platform's shell and make `restrict()` throw.
 
-Each lane's persona comes from `LANE_PROMPTS[laneKey]` (§3). The `persona` and `toolFilter` fields go into the same request object the prototype already builds (`prototype/host.js:244-256`).
+Each lane's persona comes from `LANE_PROMPTS[laneKey]` (§3). The `persona` and `toolFilter` fields go into the same request object the prototype already built.
 
 ---
 
@@ -429,7 +432,7 @@ Why A is wrong, concretely: a profile-level row registers into the **root** real
 3. **Dependency mechanism → baked `file:` URLs** (locked). The CLI resolves both packages under the DSH home and writes absolute URLs into the installed host module, so the user runs no dependency command. The junction/symlink recipe survives as the manual fallback in §5.
 4. **Recommended lane mapping → the settings `base` layer** (locked): `settings.register(ns, schema, { base: RECOMMENDED })` (`nm/dsh-settings/lib/index.js:287`). It shows as inherited-but-not-overridden in `describe()`, which the shipped settings surface understands, and 全部改回继承 writes empty strings into the user layer to override it lane by lane.
 5. **UI language → Chinese** (locked), consistent with the shipped preset names. The strings are hard-coded rather than registered as a locale namespace.
-6. **Prompt section → dropped** (locked). `slots/dispatch.md` already names the seven lanes, so the prototype's `systemPrompt.section` (`prototype/host.js:274-281`) is gone and the orchestrator prompt stays byte-identical for request caching.
+6. **Prompt section → dropped** (locked). `slots/dispatch.md` already names the seven lanes, so the prototype's `systemPrompt.section` is gone and the orchestrator prompt stays byte-identical for request caching.
 
 One decision this plan did **not** settle, resolved during implementation:
 

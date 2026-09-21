@@ -17,8 +17,10 @@
  * A profile row is the only way in, so this one inert row is the entire
  * profile-level footprint. See ../lane-plugin/PLAN.md and the package README.
  *
- * `nm/` abbreviates
- * `D:\Programs\node_global\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`.
+ * `nm/` abbreviates the deployment's own harness packages, i.e.
+ * `<node_modules>/@deepseek-ai/dsh/node_modules/@deepseek-ai/` — the path under
+ * whichever global install the `dsh` launcher resolves from. Every `nm/…`
+ * citation in this repository is relative to that directory.
  *
  * @module my-workbench-lanes-ui
  */

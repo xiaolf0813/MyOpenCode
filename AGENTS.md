@@ -1,12 +1,43 @@
 # AGENTS.md
 
-This repository ships **my-workbench**, an npm CLI that installs a portable OpenCode + Claude Code agent setup into a target project (or, with `--user`, at user level: `~/.config/opencode/` + `~/.claude/`), plus two opt-in user-level targets: ZCode (`--zcode`) and DeepSeek Harness agent presets (`--dsh`). OpenCode support is split into a native target and an opt-in omos target (the `oh-my-opencode-slim` plugin, short name: **omos**). This file is auto-loaded from the repo root on every run — keep it structural and lean.
+`agents/` is this repository's only content source: everything else — the generated agent files, the backend assets, the installed targets — is assembled from it. Validation is `node bin/my-workbench.js assemble --check` (which also renders the DSH composition and lane plugin, and loads the settings page's inert host half) plus, for CLI changes, running the CLI. There is no build and no test suite. Keep this file structural and lean: record where things live and what may not change, not how a mechanism works.
 
-There is no build and no test suite. Validation means: `node bin/my-workbench.js assemble --check` passes (it also renders the dsh composition and the dsh lane plugin, imports the lane settings page's inert host half, and parse-checks every plugin JavaScript file) and every touched file still parses. CLI behavior changes apply on the next run.
+## Targets
+
+| Target | Flag | Where it installs |
+| --- | --- | --- |
+| opencode (native) | default set | `.opencode/` — core config plus native `.opencode/agents/*.md` |
+| claude | default set | `.claude/` — `settings.json` plus `.claude/agents/*.md`; omos-agnostic, identical in every target |
+| omos | `--omos` | `.opencode/` project assets only; exclusive with `--opencode` |
+| user level | `--user` | the same opencode/omos + claude assets under `~/.config/opencode/` + `~/.claude/` |
+| zcode | `--zcode` | `~/.zcode/AGENTS.md` (the orchestrator prompt as ZCode's global instruction file) + `~/.zcode/agents/*.md` |
+| dsh | `--dsh` | `<DSH_HOME>/.agent-presets/my-workbench/` (`DSH_HOME`, else `~/.dsh`); requires an existing DSH home |
+
+Every target downloads nothing and writes nothing inside a project; existing files are skipped unless `--force`.
+
+**opencode** requires an `opencode` binary on PATH. When a user-level omos install is detected, it installs the omos way instead (omits assets, no native agents) to avoid agent conflicts.
+
+**omos** requires OpenCode **and** a pre-existing user-level omos install in `~/.config/opencode`: the plugin loads from that user level, so my-workbench never pins a `"plugin"` entry. Its `orchestrator_append.md` restates the universal Disciplines for the plugin-provided omos orchestrator prompt.
+
+**zcode** has no configurable main agent and no project-level subagents, so `~/.zcode/` is the whole install.
+
+**dsh** needs one deliberate exception, because the tools and the settings page mount at different levels: the preset owns the seven `subagent_*` tools and the `my-workbench-lanes` settings namespace (seeded from a recommended model mapping), while the page can only be served from a profile row — client halves are discovered on the profile loader's entries, never inside a preset. `--dsh` therefore also maintains ONE marked, managed block in `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` holding one inert row, skipped with a printed row when no single profile directory can be found. `agents/backends/dsh/` and `docs/dsh-lane-plugin/` carry the details.
+
+## Layout
+
+| Path | Role |
+| --- | --- |
+| `bin/my-workbench.js` | The CLI (zero dependencies, ESM). |
+| `agents/prompts/` | Agent prompt bodies — the single source, each opening with the omos attribution notice. |
+| `agents/prompts_cn/` | Chinese reference translations of the prompt bodies — never packaged. |
+| `agents/backends/<name>/` | Everything backend-specific: the assets copied to a target, plus `agents.json` (frontmatter per agent, markdown backends) and `slots/` for `{{slot:...}}` text. `dsh/` is template-only — no `agents.json`: `agent.cordis.yml` lists the rows and pulls prompt bodies with `{{prompt:<agent>}}`, `lane-plugin/` is the packaged host half the preset mounts, `lane-plugin-ui/` the settings page the profile mounts. |
+| `docs/` | Reference only, never shipped: the DSH lane plugin's design record (`docs/dsh-lane-plugin/`) and the agent-skill notes (`docs/agents/`). |
+| `.claude/`, `.opencode/` | This repo's own live agent setup — generated, gitignored; materialize with `npx my-workbench assemble`. |
+| `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
+
+`.opencode/node_modules/` and `.opencode/package-lock.json` are installed runtime artifacts — never committed or packaged. A fresh clone materializes `.claude/` and `.opencode/` with `npx my-workbench assemble`.
 
 ## Single source & generated files
-
-`agents/` is the only place to edit content. Everything else is assembled:
 
 | Source (edit here) | Generated (do not hand-edit) |
 | --- | --- |
@@ -16,47 +47,22 @@ There is no build and no test suite. Validation means: `node bin/my-workbench.js
 | `agents/backends/omos/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
 | `agents/backends/omos/package.json` | `.opencode/package.json` |
 | `agents/disciplines.md` + `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
-| `agents/backends/zcode/` | `~/.zcode/AGENTS.md` + `~/.zcode/agents/*.md` (user-level; via `npx my-workbench --zcode`; nothing generated inside the repo) |
-| `agents/backends/dsh/` | `~/.dsh/.agent-presets/my-workbench/` (user-level; via `npx my-workbench --dsh`; nothing generated inside the repo) |
+| `agents/backends/zcode/`, `agents/backends/dsh/` | user-level only, nothing generated inside this repo: `~/.zcode/` and `~/.dsh/.agent-presets/my-workbench/` |
 
-After editing any source, run `npx my-workbench assemble` in the repo root (`--check` verifies without writing). The generated `.claude/` and `.opencode/` are gitignored — they exist only on your machine; a fresh clone materializes them with `npx my-workbench assemble`. `.opencode/node_modules/` and `.opencode/package-lock.json` are installed runtime artifacts — never committed or packaged.
-
-## Layout
-
-| Path | Role |
-| --- | --- |
-| `bin/my-workbench.js` | The CLI (zero dependencies, ESM). |
-| `agents/prompts/` | Agent prompt bodies — single source, omos attribution notice first (dropped when assembled). |
-| `agents/prompts_cn/` | Chinese reference translations — never packaged. |
-| `agents/backends/<name>/` | Everything backend-specific: assets copied to the target, plus `agents.json` (markdown backends) and `slots/` for `{{slot:...}}` text. `dsh/` is template-only — no `agents.json`: its `agent.cordis.yml` lists the rows and pulls prompt bodies with `{{prompt:<agent>}}`, `dsh/lane-plugin/` holds the packaged host half the preset mounts, and `dsh/lane-plugin-ui/` holds the settings page the profile mounts. |
-| `docs/dsh-lane-plugin/` | The DSH lane plugin's design record: feasibility findings, the plan, the original dynamic-plugin dump, and `BACKLOG.md` — the open follow-ups as a handoff briefing for whoever continues the work. Reference only, and never shipped (outside the `files` whitelist). |
-| `.claude/`, `.opencode/` | This repo's own live agent setup — generated from `agents/`, gitignored; materialize with `npx my-workbench assemble`. |
-| `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
-
-## OpenCode targets (opencode / omos)
-
-- **opencode** (in the default set; requires an `opencode` binary on PATH): native setup — core config (`opencode.jsonc`) plus native `.opencode/agents/*.md` assembled from the omos-derived prompts. When a user-level omos install is detected, it switches to the omos way (omits assets, no native agents) to avoid agent conflicts. Nothing is downloaded.
-- **omos** (opt-in `--omos`; requires OpenCode **and** a pre-existing user-level omos install in `~/.config/opencode`): copies only the omos project assets (`oh-my-opencode-slim.jsonc`, prompt overrides, `package.json`) into `.opencode/`; the `orchestrator_append.md` override restates the universal Disciplines for the plugin-provided omos orchestrator prompt (the specialists carry their own copy — see the editing conventions below, which keep that append in sync). The plugin loads from the user level, so my-workbench never pins a `"plugin"` entry and never downloads anything; a missing prerequisite fails fast before any write. Exclusive with `--opencode`.
-
-`.claude/` is omos-agnostic and installed identically in every target.
-
-**ZCode target** (opt-in via `--zcode`/`zcode`, never in the default set): user-level only — `~/.zcode/AGENTS.md` composed from `agents/backends/zcode/AGENTS.md` (header) + `agents/prompts/orchestrator.md` (body), plus subagents assembled into `~/.zcode/agents/`. No omos, no downloads, nothing written inside the repo or the project; existing files are skipped unless `--force`.
-
-**DSH target** (opt-in via `--dsh`/`dsh`, never in the default set): user-level only — one agent preset at `<DSH_HOME>/.agent-presets/my-workbench/` (`DSH_HOME`, else `~/.dsh`), holding `preset.yml` (picker metadata, copied from the backend), `agent.cordis.yml` (the composition, rendered from the backend template), `lane-plugin/` (the preset-mounted host half, rendered from `agents/backends/dsh/lane-plugin/`) and `lane-plugin-ui/` (the settings page, copied from `agents/backends/dsh/lane-plugin-ui/`). The composition is the orchestrator prompt as the preset persona plus ONE row naming the host half; that plugin registers the seven `subagent_*` delegation tools and restricts each child the way its prompt does (read-only lanes lose `write`/`edit`, observer/improver also lose the shell, every lane loses the delegation tools). It also owns the `my-workbench-lanes` settings namespace behind *settings → MyWorkbench 赛道模型*, where each lane's model and reasoning effort are pinned; a fresh install is seeded from a recommended mapping shipped as the namespace's `base` layer. **The tools are preset-scoped; the page needs one profile row.** DSH discovers browser halves only by scanning the profile loader's own entries, so a row inside an agent preset is never scanned and its page is never served. `--dsh` therefore also maintains ONE marked, managed block in `<DSH_HOME>/profiles/<profile>/cordis.patch.yml` holding a single inert row (`id: my-workbench-lanes-ui`, `name: file:///…/lane-plugin-ui/src/index.js`). The block is replaced in place, never touches or reorders the user's own rows, is regenerated unconditionally, and is skipped with a printed row when no single profile directory can be found. That row is the whole profile-level footprint: no tools, no services, no packages installed into any `node_modules`, and no other preset gains a tool. The page registers SYNCHRONOUSLY from `apply()` and decides inside the component what to show — live controls while the lane host half's namespace is registered, an inert placeholder otherwise — because registering after an `await` left the ledger entry `active: false` and the panel blank. The host half must be named by this preset only, because it registers a settings namespace and DSH refuses a duplicate registration — and it must TOLERATE an already-registered namespace, because DSH re-mounts a stale composition without disposing the previous mount's scope, which leaves the old registration live. It requires an existing DSH home, no omos, no downloads, nothing written inside the repo or the project; existing files are skipped unless `--force`. DSH reads presets at session start, so a restart of the session is what picks a change up, after which one page refresh reveals the settings page. A change to the lane plugin's **host** code needs a full DSH restart: the preset row is imported once per process (Node's ESM cache; the loader re-imports the same specifier when it re-mounts a stale composition), while the settings page is a browser module that a page reload refreshes.
+Run `npx my-workbench assemble` in the repo root after editing any source (`--check` verifies without writing).
 
 ## Editing conventions
 
-- **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change, update the corresponding `agents/prompts_cn/<agent>_cn.md`; keep per-backend frontmatter in `agents/backends/*/agents.json` in sync; then assemble. The notice at the head of each adapted body (`ATTRIBUTION_NOTICE` in `bin/my-workbench.js`) stays in the source: keep it verbatim and keep it first, because `stripAttribution()` drops it from every generated prompt, and a moved or edited notice survives into the delivered text. The shipped credit is the README's Attribution section. `agents/prompts/improver.md` deliberately has NO notice: it is in-house, not adapted, so do not add one.
-- **Backend-specific text** → `{{slot:<name>}}` placeholders in `agents/prompts/*.md`; per-backend content in `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt must exist for every backend or assembly fails.
-- **DSH preset composition** → `agents/backends/dsh/agent.cordis.yml` is the template: the orchestrator persona plus ONE row (`- id: lanes`) naming the lane plugin with a `./`-relative `name`. A `{{prompt:<agent>}}` placeholder must stand alone on its own line and is filled from `agents/prompts/<agent>.md` as a YAML block.
-- **DSH lane plugin (host half)** → `agents/backends/dsh/lane-plugin/`. The roster, the per-lane `toolFilter` deny lists and the recommended model mapping live in `host-package/src/index.js`; the prompts are NOT duplicated — they come from `prompts.template.js` via the same `{{prompt:<agent>}}` mechanism, rendered into `src/prompts.generated.js`. Adding a specialist means adding its entry to the roster, its prompt placeholder, its row in the settings page, and its `toolName` to every other lane's deny list (a lane must stay a leaf); `tools.restrict()` rejects unknown names, so a stale list fails loudly at spawn. `assemble --check` proves the three lane tables agree. Reinstall with `npx my-workbench --dsh`, then start a new DSH session.
-- **DSH lane settings page** → `agents/backends/dsh/lane-plugin-ui/`, mounted by a profile row, NOT by the preset (client halves are only discovered on profile loader entries). `src/index.js` must stay inert — no tools, no services, no settings namespace — and `lib/client.js` must keep using only the shipped Remote wire (`ctx.remote.settings.describe()/update()`, `ctx.remote.session.modelCatalog()`), never a package-private RPC. Its registration must stay SYNCHRONOUS in `apply()` and its own gate is the component's placeholder when the namespace is absent — an `await` before `slots.register` leaves the ledger entry inactive and the panel blank. The CLI maintains the profile row itself (`writeLaneUiPatchRow`); do not hand-edit the installed `cordis.patch.yml`.
-- **Bare imports in the lane plugin are forbidden** except through a `{{dep:<alias>}}` placeholder declared in `DSH_LANE_PLUGIN_DEPS` (`bin/my-workbench.js`): a plugin under `$DSH_HOME/.agent-presets/` cannot resolve a package by name, so `--dsh` bakes an absolute `file:` URL at install time. The settings page declares no dependencies at all, and its browser half may only `require` the shell's nine seed modules — `assemble --check` enforces both, together with the `dsh.client`/`exports["./client"]` pair DSH scans for.
-- **Universal behavior rules** → `agents/disciplines.md` (the Fact / Language / Security Disciplines every agent carries, plus future additions) is the single authored copy; it belongs to no one agent. Assembly appends it to every agent's delivered prompt — every markdown backend, the DSH preset persona, and every DSH lane persona — so each agent carries it itself and no delegation brief repeats it. One rule per concern; edit it in that one file.
-- **Chinese reference translations** → `agents/disciplines_cn.md` sits beside its source, `agents/disciplines.md`, in the same directory; the per-agent translations stay in `agents/prompts_cn/<agent>_cn.md`, next to the prompt bodies they translate. All are reference only, never packaged, and the agent prompts deliberately carry no copy of the disciplines: the authority is the English `agents/disciplines.md`, which assembly appends to every delivered agent prompt.
+- **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change update the matching `agents/prompts_cn/<agent>_cn.md` and keep frontmatter in `agents/backends/*/agents.json` in sync; then assemble. Keep the omos attribution notice that opens each adapted body verbatim and first: `stripAttribution()` drops it from every generated prompt by exact match, so an edited or moved notice ships into the delivered text. `agents/prompts/improver.md` is in-house and deliberately carries none — do not add one.
+- **Backend-specific text** → `{{slot:<name>}}` in `agents/prompts/*.md`, filled from `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt must exist for every backend or assembly fails.
+- **Universal behavior rules** → `agents/disciplines.md` is the single authored copy, with `agents/disciplines_cn.md` beside it. Assembly appends the English file to every delivered agent prompt — markdown backends, DSH preset persona and DSH lane personas — so no delegation brief repeats it. One rule per concern.
+- **DSH preset composition** → `agents/backends/dsh/agent.cordis.yml` is the template: the orchestrator persona plus ONE row (`- id: lanes`) naming the lane plugin with a `./`-relative `name`. A `{{prompt:<agent>}}` placeholder must stand alone on its own line.
+- **DSH lane plugin (host half)** → `agents/backends/dsh/lane-plugin/`. The roster, the per-lane `toolFilter` deny lists and the recommended model mapping live in `host-package/src/index.js`; prompts are not duplicated — `prompts.template.js` pulls them into `src/prompts.generated.js`. Adding a specialist means its roster entry, its prompt placeholder, its row in the settings page, and its `toolName` in every other lane's deny list (a lane stays a leaf; `tools.restrict()` rejects unknown names, so a stale list fails loudly at spawn). `assemble --check` proves the three lane tables agree; reinstall with `npx my-workbench --dsh`.
+- **DSH lane settings page** → `agents/backends/dsh/lane-plugin-ui/`, mounted by a profile row, NOT by the preset. `src/index.js` stays inert — no tools, no services, no settings namespace — and `lib/client.js` uses only the shipped Remote wire (`ctx.remote.settings.describe()/update()`, `ctx.remote.session.modelCatalog()`), never a package-private RPC. Its registration stays SYNCHRONOUS in `apply()`. The CLI owns the profile row (`writeLaneUiPatchRow`); do not hand-edit the installed `cordis.patch.yml`. Rationale for each of these sits in `docs/dsh-lane-plugin/` and the package's own `README.md`.
+- **Bare imports in the lane plugin are forbidden** except through a `{{dep:<alias>}}` placeholder declared in `DSH_LANE_PLUGIN_DEPS` (`bin/my-workbench.js`), which `--dsh` bakes into an absolute `file:` URL at install time — a plugin under `$DSH_HOME/.agent-presets/` cannot resolve a package by name. The settings page declares no dependencies, and its browser half may only `require` the shell's nine seed modules; `assemble --check` enforces both plus the `dsh.client`/`exports["./client"]` pair DSH scans for.
 - **Model / variant / council presets** → `agents/backends/omos/oh-my-opencode-slim.jsonc`. Keep JSONC parseable (comments and trailing commas allowed).
 - **Prompt tuning** → append-only, via `agents/backends/omos/oh-my-opencode-slim/<agent>_append.md` (`orchestrator_append.md` is the working example). A full `<agent>.md` replacement must restate the entire bundled prompt and is a last resort.
-- **Terminology**: in prose and docs, call the plugin **omos**. Keep the full name `oh-my-opencode-slim` in paths and filenames.
+- **Terminology**: in prose and docs, call the plugin **omos**; keep the full name `oh-my-opencode-slim` in paths and filenames.
 - **No downloads**: my-workbench never pins a `"plugin"` entry and never downloads or executes anything. The omos target only copies project assets and requires a pre-existing user-level omos install; never widen it silently.
 
 ## Target projects
@@ -75,4 +81,4 @@ Default five-role vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: root `CONTEXT.md` (created lazily) + `docs/adr/`. See `docs/agents/domain.md`.

@@ -199,10 +199,10 @@ Notes
   my-workbench never pins a "plugin" entry and never downloads anything.
 
   ZCode target (--zcode or "zcode") is never part of the default set. It
-  composes the global ~/.zcode/AGENTS.md from agents/backends/zcode/AGENTS.md
-  + agents/prompts/orchestrator.md, installs user-level subagents into
-  ~/.zcode/agents/, skips existing files unless --force, and downloads
-  nothing. ZCode picks up changes in new sessions only.
+  installs the orchestrator prompt as the global ~/.zcode/AGENTS.md, plus
+  user-level subagents into ~/.zcode/agents/, skips existing files unless
+  --force, and downloads nothing. ZCode picks up changes in new sessions
+  only.
 
   DSH target (--dsh or "dsh") is never part of the default set either. It
   writes an agent preset at <DSH_HOME>/.agent-presets/my-workbench/
@@ -614,8 +614,7 @@ function renderDshComposition(usedSlots) {
  * produce `'"…"'`.
  *
  * The body is trimmed of trailing whitespace exactly as fillPrompts trims it, so
- * the packaged persona is byte-identical to the one the composition used to
- * carry.
+ * a persona is byte-identical whichever composition delivers it.
  */
 function fillPromptsJson(template, backendName, usedSlots) {
   return template.replace(PROMPT_RE, (raw, agentName, offset, source) => {
@@ -1107,17 +1106,11 @@ function applyOmos(scope, opts, counts) {
 }
 
 /**
- * Compose the ZCode global instruction file: the zcode backend header
- * (platform notes) followed by the shared orchestrator prompt body, so the
- * main agent is driven by the orchestrator prompt. Slot placeholders are
- * filled with zcode slots and recorded in usedSlots — applyZcode shares one
- * set across the subagent loop and this render so unused-slot accounting
- * covers both consumers.
+ * Compose the ZCode global instruction file: the shared orchestrator prompt,
+ * with this backend's `slots/dispatch.md` substituted for `{{slot:dispatch}}`.
  */
 function composeZcodeAgentsMd(usedSlots = new Set()) {
-  const header = readFileSync(join(PKG_ROOT, "agents", "backends", "zcode", "AGENTS.md"), "utf8");
-  const body = agentPromptBody("orchestrator");
-  return `${header.trimEnd()}\n\n${fillSlots(body, "zcode", usedSlots)}`;
+  return fillSlots(agentPromptBody("orchestrator"), "zcode", usedSlots);
 }
 
 /**

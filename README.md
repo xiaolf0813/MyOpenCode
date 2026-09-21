@@ -49,7 +49,7 @@ Existing files are skipped unless `--force` is given, so re-running is safe.
 
 `npx my-workbench --zcode` installs ZCode support at **user level only**: `~/.zcode/AGENTS.md` (global instructions for the main agent) and `~/.zcode/agents/*.md` (subagents). ZCode has no configurable main agent and no project-level subagents, so there is nothing to install inside a project.
 
-- The global file is composed from `agents/backends/zcode/AGENTS.md` (platform notes) plus `agents/prompts/orchestrator.md` — the orchestrator prompt drives the main agent.
+- The global file is `agents/prompts/orchestrator.md` — the orchestrator prompt drives the main agent, with the ZCode dispatch convention substituted from `agents/backends/zcode/slots/dispatch.md`.
 - Subagents run with `injectAgentsMd: false`: the global file is not injected into them, so every delegation brief must carry full context.
 - Opt-in only (`--zcode` or `zcode`) — the default targets remain `.opencode/` + `.claude/`. No omos, nothing downloaded. Existing files are skipped unless `--force`. Restart ZCode sessions to pick up changes.
 
@@ -141,7 +141,6 @@ agents/
     │   ├── oh-my-opencode-slim/  # prompt overrides (<agent>_append.md)
     │   └── package.json          # plugin node dependencies
     ├── zcode/
-    │   ├── AGENTS.md       # global-file header, composed with prompts/orchestrator.md
     │   ├── agents.json     # per-agent frontmatter fields (description/model/injectAgentsMd)
     │   └── slots/          # dispatch.md (every backend has it; not enumerated here)
     └── dsh/

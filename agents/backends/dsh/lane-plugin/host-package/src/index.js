@@ -22,9 +22,11 @@
  * gains a tool, a prompt section or a UI control. Nothing is mounted at profile
  * level, and nothing is installed into the profile's `node_modules`.
  *
- * `nm/` below abbreviates
- * `D:\Programs\node_global\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`;
- * see ../FEASIBILITY.md for the evidence trail and ../PLAN.md for the plan.
+ * `nm/` below abbreviates the deployment's own harness packages, i.e.
+ * `<node_modules>/@deepseek-ai/dsh/node_modules/@deepseek-ai/` — the path under
+ * whichever global install the `dsh` launcher resolves from. Every `nm/…`
+ * citation in this repository is relative to that directory; see
+ * ../FEASIBILITY.md for the evidence trail and ../PLAN.md for the plan.
  *
  * ── PLACEHOLDERS RENDERED AT INSTALL TIME ──────────────────────────────────
  * The two `{{dep:…}}` import specifiers below are replaced by
