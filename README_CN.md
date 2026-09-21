@@ -21,7 +21,7 @@ npx my-workbench
 
 OpenCode 支持分为两个独立目标：
 
-- **`--opencode`（原生）** — 核心配置（`opencode.jsonc`）加原生 `.opencode/agents/*.md` 子智能体。要求已安装 OpenCode（PATH 上有 `opencode`）。不下载任何东西。通用行为规则（"Disciplines" 一节）位于 orchestrator 提示词内，并逐字复制到每个委派简报的顶部。检测到用户级 omos 安装（`~/.config/opencode`）时，会改为按 omos 方式安装（省略资产、不装原生 agents），以避免智能体冲突。
+- **`--opencode`（原生）** — 核心配置（`opencode.jsonc`）加原生 `.opencode/agents/*.md` 子智能体。要求已安装 OpenCode（PATH 上有 `opencode`）。不下载任何东西。通用行为规则（`agents/disciplines.md`）在组装时被追加进每个 agent 自己的提示词，因此每个 agent 自带这套纪律，orchestrator 不再把它粘贴进委派简报。检测到用户级 omos 安装（`~/.config/opencode`）时，会改为按 omos 方式安装（省略资产、不装原生 agents），以避免智能体冲突。
 - **`--omos`（可选插件方案）** — 仅复制 omos 项目资产（oh-my-opencode-slim.jsonc、提示词覆盖、插件 node 依赖）到 `.opencode/`。要求 OpenCode **且**已存在用户级 omos 安装（`~/.config/opencode`）：插件从用户级加载，因此 my-workbench 永不固定 `"plugin"` 条目、永不下载任何东西。不能与 `--opencode` 同时使用。
 
 没有确认流程：显式的 `--omos` 旗标即显式选择；若 omos 尚未安装，前置检查直接快速失败。
@@ -126,7 +126,9 @@ npx my-workbench --dsh --force        # （重新）写入 ~/.dsh/.agent-presets
 
 ```
 agents/
-├── prompts/          # 每个智能体的提示词正文，仅一份（含 omos 署名声明）
+├── disciplines.md    # 通用纪律，组装时追加到每个 agent 提示词末尾
+├── disciplines_cn.md # disciplines.md 的中文参考译文（永不打包）
+├── prompts/          # 每个智能体的提示词正文，仅一份（署名声明留在此处，组装时剥离）
 ├── prompts_cn/       # 中文参考翻译（永不打包）
 └── backends/         # 所有后端专属内容；每个后端可带 slots/*.md
                       # （后端专属文本，替换 agents/prompts/ 中的 {{slot:...}} 占位符）
@@ -163,7 +165,7 @@ agents/
 
 ## 署名
 
-智能体提示词改编自 [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)（MIT 许可证，© 2025）；每个衍生提示词文件都带有该声明。`agents/prompts_cn/` 仅供参考，永不打包。
+智能体提示词改编自 [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)（MIT 许可证，© 2025），`improver` 除外 —— 它由本项目原创。该声明位于 `agents/prompts/` 下每个改编文件的开头 —— 出处与源码放在一起 —— 组装时会被剥离，因此交付给 agent 的提示词里不含许可证声明。`agents/prompts_cn/` 与 `agents/disciplines_cn.md` 仅供参考，永不打包。
 
 ## 许可证
 

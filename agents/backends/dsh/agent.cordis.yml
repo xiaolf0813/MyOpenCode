@@ -166,6 +166,11 @@
 # Model routing now lives in the plugin's settings namespace (settings →
 # MyWorkbench 赛道模型), seeded from the plugin's recommended mapping; see
 # docs/dsh-lane-plugin/PLAN.md and lane-plugin/host-package/src/index.js.
+#
+# The universal disciplines reach each lane the same way a lane's persona does:
+# assembly appends them (agents/disciplines.md) to every agent prompt the plugin
+# delivers to a child, so no delegation brief carries them (bin/my-workbench.js,
+# agentPromptBody).
 - id: delegation
   name: cordis:group
   group: true

@@ -413,6 +413,43 @@ function loadBackend(name) {
   return JSON.parse(readFileSync(join(PKG_ROOT, "agents", "backends", name, "agents.json"), "utf8"));
 }
 
+/**
+ * Read one shared prompt body verbatim; a backend template may only reference
+ * prompts that exist. This is the raw body of ONE agent, before the omos
+ * attribution notice is dropped and the universal disciplines appended — every
+ * delivery path of a prompt starts here.
+ */
+function promptBody(agentName) {
+  const file = join(PKG_ROOT, "agents", "prompts", `${agentName}.md`);
+  if (!existsSync(file)) {
+    throw new Error(`agents/prompts/${agentName}.md is missing (referenced by a backend template)`);
+  }
+  return readFileSync(file, "utf8");
+}
+
+/**
+ * The attribution notice every adapted prompt body opens with, verbatim.
+ * Provenance belongs in the SOURCE and the README, not in the text an agent is
+ * given: the notice is a licence statement, and a licence statement has no
+ * addressee inside a system prompt.
+ */
+const ATTRIBUTION_NOTICE =
+  "> Adapted from [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) agent prompts — MIT License, Copyright (c) 2025.";
+
+/**
+ * Drop the attribution notice from the head of a prompt body. Exactly one
+ * optional leading notice and the blank line after it go; nothing else is
+ * touched. A body without the notice passes through unchanged, and a body that
+ * merely mentions oh-my-opencode-slim mid-prompt keeps that mention.
+ *
+ * @param {string} body - a raw shared prompt body.
+ * @returns {string} the delivered text, notice removed.
+ */
+function stripAttribution(body) {
+  const head = `${ATTRIBUTION_NOTICE}\n\n`;
+  return body.startsWith(head) ? body.slice(head.length) : body;
+}
+
 /** Load a backend's slot texts: agents/backends/<backend>/slots/<name>.md -> Map(name -> trimmed content). */
 function loadSlots(backendName) {
   const dir = join(PKG_ROOT, "agents", "backends", backendName, "slots");
@@ -452,14 +489,55 @@ function warnUnusedSlots(backendName, usedSlots) {
 /**
  * Assemble one agent markdown file for a backend: its frontmatter lines from
  * agents/backends/<backend>.json joined with the shared prompt body from
- * agents/prompts/<name>.md (which carries the omos attribution notice),
- * with {{slot:...}} placeholders filled from the backend's slots/.
+ * agents/prompts/<name>.md (which carries the omos attribution notice), with
+ * {{slot:...}} placeholders filled from the backend's slots/ and the universal
+ * disciplines appended last — a delivered agent prompt is body + disciplines,
+ * the same pair every other backend delivers.
  */
 function assembleAgent(backendName, name, usedSlots) {
   const meta = loadBackend(backendName).agents[name];
   if (!meta) throw new Error(`agents/backends metadata is missing agent '${name}'`);
-  const body = readFileSync(join(PKG_ROOT, "agents", "prompts", `${name}.md`), "utf8");
-  return `---\n${meta.frontmatter.join("\n")}\n---\n\n${fillSlots(body, backendName, usedSlots)}`;
+  const body = fillSlots(stripAttribution(promptBody(name)), backendName, usedSlots).replace(/^\s+/, "").replace(/\s+$/, "");
+  return `---\n${meta.frontmatter.join("\n")}\n---\n\n${body}${disciplinesBlock()}`;
+}
+
+// ── the universal disciplines ───────────────────────────────────────────────
+
+/**
+ * The universal disciplines as delivered text: agents/disciplines.md, verbatim,
+ * with the blank-line separator that appends it to an agent body. They live in
+ * their own shared file rather than inside one agent's prompt, because every
+ * agent carries them — the orchestrator included.
+ * @returns {string} the appended block, without a trailing newline.
+ */
+function disciplinesBlock() {
+  const file = join(PKG_ROOT, "agents", "disciplines.md");
+  if (!existsSync(file)) throw new Error("agents/disciplines.md is missing (the universal disciplines every agent prompt carries)");
+  return "\n\n" + readFileSync(file, "utf8").replace(/\s+$/, "");
+}
+
+/**
+ * Deliver one agent's prompt with the universal disciplines appended.
+ *
+ * The disciplines used to reach a specialist only when the orchestrator copied
+ * them into every delegation brief: that put a fixed block on every dispatch —
+ * cost proportional to briefs, not to sessions — and made correctness depend on
+ * the orchestrator obeying a copy instruction. Every agent now carries them in
+ * its own prompt: authored once, delivered by every backend (the markdown
+ * backends inline the body, DSH delivers it as the preset persona and as each
+ * lane's persona), and paid for once per session instead of once per brief.
+ *
+ * Appended at the END of the body, deliberately: the disciplines are the last
+ * thing the agent reads, they leave every persona's opening intact, and the
+ * result stays a mechanical comparison for `--check`. Slots are filled BEFORE
+ * the append in every path, so a `{{slot:...}}` inside a body is always
+ * substituted first.
+ *
+ * @param {string} agentName - shared prompt name (file base name, or a lane key).
+ * @returns {string} prompt text; no trailing newline, as prompt readers expect.
+ */
+function agentPromptBody(agentName) {
+  return stripAttribution(promptBody(agentName)).replace(/^\s+/, "").replace(/\s+$/, "") + disciplinesBlock();
 }
 
 /**
@@ -485,15 +563,6 @@ function dshHome() {
   return process.env.DSH_HOME || join(homedir(), ".dsh");
 }
 
-/** Read one shared prompt body; a backend template may only reference prompts that exist. */
-function promptBody(agentName) {
-  const file = join(PKG_ROOT, "agents", "prompts", `${agentName}.md`);
-  if (!existsSync(file)) {
-    throw new Error(`agents/prompts/${agentName}.md is missing (referenced by a backend template)`);
-  }
-  return readFileSync(file, "utf8");
-}
-
 /**
  * Replace {{prompt:<agent>}} placeholders in a backend template with that
  * agent's shared prompt body — a structured target file embeds the prompt, it
@@ -511,7 +580,7 @@ function fillPrompts(template, backendName, usedSlots) {
       throw new Error(`{{prompt:${agentName}}} must stand alone on its own line in agents/backends/${backendName}/`);
     }
     const pad = " ".repeat(line.match(/^\s*/)[0].length);
-    const body = fillSlots(promptBody(agentName), backendName, usedSlots).replace(/\s+$/, "");
+    const body = fillSlots(agentPromptBody(agentName), backendName, usedSlots).replace(/\s+$/, "");
     // The match starts after the placeholder line's own indentation, so the
     // body's first line already sits at `pad` columns and only the rest need it.
     return body
@@ -557,7 +626,7 @@ function fillPromptsJson(template, backendName, usedSlots) {
         `{{prompt:${agentName}}} in agents/backends/${backendName}/ must not be quoted: the replacement is already a complete JSON string literal`,
       );
     }
-    return JSON.stringify(fillSlots(promptBody(agentName), backendName, usedSlots).replace(/\s+$/, ""));
+    return JSON.stringify(fillSlots(agentPromptBody(agentName), backendName, usedSlots).replace(/\s+$/, ""));
   });
 }
 
@@ -1047,7 +1116,7 @@ function applyOmos(scope, opts, counts) {
  */
 function composeZcodeAgentsMd(usedSlots = new Set()) {
   const header = readFileSync(join(PKG_ROOT, "agents", "backends", "zcode", "AGENTS.md"), "utf8");
-  const body = readFileSync(join(PKG_ROOT, "agents", "prompts", "orchestrator.md"), "utf8");
+  const body = agentPromptBody("orchestrator");
   return `${header.trimEnd()}\n\n${fillSlots(body, "zcode", usedSlots)}`;
 }
 

@@ -1,7 +1,6 @@
 # Upstream issue draft — stale preset re-mount leaks the previous mount's settings registration
 
-**Target:** <https://github.com/deepseek-ai/deepseek-harness> (the `@deepseek-ai/dsh` deployment this was observed on)
-**Environment:** `@deepseek-ai/dsh` **0.1.5-rc.2** · Node **v24.15.0** · Windows **10.0.26200** (the mechanism is platform-independent)
+**Target:** <https://github.com/deepseek-ai/deepseek-harness> (the `@deepseek-ai/dsh` deployment this was observed on) **Environment:** `@deepseek-ai/dsh` **0.1.5-rc.2** · Node **v24.15.0** · Windows **10.0.26200** (the mechanism is platform-independent)
 
 ## How to post this (upstream Issues are disabled)
 
@@ -71,26 +70,13 @@ if (this.registrations.has(parsedNs)) throw new Error(`settings namespace "${par
 
 1. Create a user preset at `$DSH_HOME/.agent-presets/repro/`:
    - `preset.yml` — `name: repro`, `description: repro`
-   - `agent.cordis.yml`:
-     ```yaml
-     - id: ns
-       name: ./plugin/src/index.js
-     ```
+   - `agent.cordis.yml`: ```yaml
+     - id: ns name: ./plugin/src/index.js ```
    - `plugin/package.json` — `{ "name": "repro-ns", "private": true, "type": "module", "main": "src/index.js" }`
-   - `plugin/src/index.js` — a preset row resolves `./`-relative names against the composition's own baseUrl (`dsh-agent-presets/lib/index.js:140-143`, `:665-676`), so a bare import of `@deepseek-ai/schemastery` does not resolve; bake an absolute `file:` URL instead:
-     ```js
-     import z from 'file:///ABS/PATH/TO/profiles/node_modules/@deepseek-ai/schemastery/lib/index.mjs'
-     export const name = 'repro-ns'
-     export const inject = ['settings']
-     export function apply(ctx) {
-       ctx.settings.register('repro-ns', z.object({ value: z.string().default('x') }), {})
-     }
-     ```
-     (Equivalently: any plugin row that registers into a host registry from a preset scope.)
+   - `plugin/src/index.js` — a preset row resolves `./`-relative names against the composition's own baseUrl (`dsh-agent-presets/lib/index.js:140-143`, `:665-676`), so a bare import of `@deepseek-ai/schemastery` does not resolve; bake an absolute `file:` URL instead: ```js import z from 'file:///ABS/PATH/TO/profiles/node_modules/@deepseek-ai/schemastery/lib/index.mjs' export const name = 'repro-ns' export const inject = ['settings'] export function apply(ctx) { ctx.settings.register('repro-ns', z.object({ value: z.string().default('x') }), {}) } ``` (Equivalently: any plugin row that registers into a host registry from a preset scope.)
 2. **Mount it once** — from a plugin tool `await ctx.agentPresets.standingKeyFor('repro')`, or simply start a session on the preset. → succeeds.
 3. **Change the composition's stamp** — e.g. append a comment line to `agent.cordis.yml` (mtime/size change is all it takes).
-4. **Mount again** — same call. → **throws** `settings namespace "repro-ns" is already registered`.
-   Expected: the second mount succeeds — the stale mount's scope is disposed before the new one applies (or the stale mount is reused rather than silently dropped).
+4. **Mount again** — same call. → **throws** `settings namespace "repro-ns" is already registered`. Expected: the second mount succeeds — the stale mount's scope is disposed before the new one applies (or the stale mount is reused rather than silently dropped).
 5. Optional, shows the leak is unreachable: `await ctx.agentPresets.remove('repro')` → re-create the directory identically → mount again → **still throws**.
 
 ## Observed chronology on 0.1.5-rc.2 (Windows)

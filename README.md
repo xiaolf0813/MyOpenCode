@@ -19,7 +19,7 @@ npx my-workbench
 
 OpenCode support comes as two independent targets:
 
-- **`--opencode` (native)** — core config (`opencode.jsonc`) plus native `.opencode/agents/*.md` subagents. Requires the OpenCode app (`opencode` on PATH). Nothing is downloaded. Universal behavior rules (the "Disciplines" section) live inside the orchestrator prompt and are copied verbatim to the top of every delegation brief. When a user-level omos install is detected (`~/.config/opencode`), it installs the omos way instead (omits assets, no native agents) to avoid agent conflicts.
+- **`--opencode` (native)** — core config (`opencode.jsonc`) plus native `.opencode/agents/*.md` subagents. Requires the OpenCode app (`opencode` on PATH). Nothing is downloaded. The universal behavior rules (`agents/disciplines.md`) are appended to every agent's own prompt at assembly, so each agent carries them and the orchestrator never pastes them into a delegation brief. When a user-level omos install is detected (`~/.config/opencode`), it installs the omos way instead (omits assets, no native agents) to avoid agent conflicts.
 - **`--omos` (opt-in plugin scheme)** — copies only the omos project assets (oh-my-opencode-slim.jsonc, prompt overrides, plugin node dependencies) into `.opencode/`. Requires OpenCode **and** an existing user-level omos install (`~/.config/opencode`): the plugin loads from that user level, so my-workbench never pins a `"plugin"` entry and never downloads anything. It cannot be combined with `--opencode`.
 
 There is no consent flow: the explicit `--omos` flag is the explicit choice, and the prerequisite check fails fast if omos is not already installed.
@@ -124,7 +124,9 @@ Everything is generated from one tree, `agents/`:
 
 ```
 agents/
-├── prompts/          # each agent prompt body, once (omos attribution included)
+├── disciplines.md    # the universal disciplines, appended to every agent prompt at assembly
+├── disciplines_cn.md # Chinese reference translation of disciplines.md (never packaged)
+├── prompts/          # each agent prompt body, once (attribution notice kept here, dropped when assembled)
 ├── prompts_cn/       # Chinese reference translations (never packaged)
 └── backends/         # everything backend-specific; each backend may carry slots/*.md
                       # (per-backend text substituted for {{slot:...}} placeholders in agents/prompts/)
@@ -161,7 +163,7 @@ In your project, `.claude/agents/` and `.opencode/` are assembled from it. Edit 
 
 ## Attribution
 
-Agent prompts are adapted from [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) (MIT License, © 2025); every derived prompt file carries the notice. `agents/prompts_cn/` exists for reference only and is never packaged.
+Agent prompts are adapted from [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) (MIT License, © 2025) — except `improver`, which is written in-house. The notice sits at the top of every adapted file under `agents/prompts/` — provenance is kept with the source — and assembly drops it from the prompts it generates, so no agent is given a licence statement. `agents/prompts_cn/` and `agents/disciplines_cn.md` exist for reference only and are never packaged.
 
 ## License
 

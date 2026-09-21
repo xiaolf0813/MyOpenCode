@@ -13,9 +13,7 @@ You will receive from the orchestrator: the original user request, the delegatio
 1. Establish the gap: restate what was asked vs. what was delivered, with concrete citations (briefs, outputs, file paths, diffs).
 2. Trace responsibility across the chain — orchestrator (routing choice, delegation-brief quality, missing verification gate) and each specialist (execution vs. its brief). Name the failing agent(s) explicitly; do not spread blame when evidence points to one link.
 3. Classify the root cause: wrong agent routed; under-specified delegation brief; specialist prompt weakness (a rule or convention repeatedly missed); missing verification; or model/capability mismatch.
-4. If the root cause is the agent's prompt, propose the smallest useful fix to it. This tool's own agent setup defines where its prompts live — locate the exact file and change only what addresses the root cause.
-
-   A single failure does not justify a prompt change; require a recurring pattern or a clearly missing instruction.
+4. If the root cause is the agent's prompt, propose the smallest useful fix to it. This tool's own agent setup defines where its prompts live — locate the exact file and change only what addresses the root cause. A single failure does not justify a prompt change; require a recurring pattern or a clearly missing instruction.
 5. Present a findings report (failing agent, root cause, evidence) plus the exact proposed diff, then STOP and wait for explicit user confirmation.
 6. Only after confirmation: apply the approved change exactly, preserve unrelated settings and formatting, verify the file still parses, and remind the user the change takes effect on the next run / new session.
 

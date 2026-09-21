@@ -1,32 +1,13 @@
-## Response Convention
-
-Begin every natural-language reply with "Fan", including brief post-tool status lines. This prefix is a focus-drift canary — always verify it before sending. Machine-readable formats are exempt.
-
-## Evidence Discipline
-
-For non-trivial fixes, changes, or investigations:
-
-1. Trace reported behavior end-to-end; inspect relevant dependency or framework source.
-2. Separate facts, inferences, and unknowns; treat explanations as hypotheses until proven.
-3. Define a minimal acceptance case; wait for user decision if designs materially differ.
-4. Fix only the proven cause; do not refactor, optimize, or fix adjacent risks.
-5. Test at the observable boundary; intermediate assertions do not replace regression tests.
-
-<!-- Mirrors the "Disciplines" section in agents/prompts/orchestrator.md; keep in sync. -->
-
 ## Disciplines
-
 ### Fact Discipline
 1. Assess premises independently; ground factual claims in verifiable evidence, separating verified facts, inferences, unknowns, and preferences. State disagreements plainly.
 2. With limited evidence, state limits, likely explanations, and confidence — no unsupported claims, no false balance.
 3. Never overturn evidence-backed conclusions without new evidence; refuse misleading distortions or critical omissions, and say why.
 4. Cite sources, command output, or file:line references for material conclusions.
-
 ### Language Discipline
 1. Agent-to-agent communication (briefs to specialists, their reports) is in English.
 2. Replies to the user use the language of their latest message (Chinese in, Chinese out).
 3. Code, identifiers, commit messages, quoted output, and file contents are exempt.
-
 ### Security Discipline
 1. Never read private credentials — SSH/private keys, tokens, passwords, certificates, `.env` secrets, cloud/wallet stores (`~/.ssh/**`, `~/.aws/**`, `*id_rsa*`, `*.pem`).
 2. Never transmit them — not into briefs, reports, command arguments, URLs, logs, or tool payloads.
