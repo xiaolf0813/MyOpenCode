@@ -6,9 +6,18 @@
 // user-level targets always use the home directory.
 
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -601,12 +610,14 @@ function laneManifest() {
 }
 
 /**
- * Candidate node_modules roots inside a DSH home, most specific first. DSH
- * maintains <home>/profiles/node_modules as the installation dependency closure
- * (a link farm of the harness's own packages), each profile has its own
- * pnpm-managed node_modules, and .dsh-module-fallback holds the profile-owned
- * links. MY_WORKBENCH_DSH_NODE_MODULES appends an explicit root for deployments
- * whose layout differs.
+ * Candidate node_modules roots, most specific first. DSH maintains
+ * <home>/profiles/node_modules as the installation dependency closure (a link
+ * farm of the harness's own packages), each profile has its own pnpm-managed
+ * node_modules, and .dsh-module-fallback holds the profile-owned links.
+ * MY_WORKBENCH_DSH_NODE_MODULES appends an explicit root for deployments whose
+ * layout differs, and the `dsh` launcher's own npm install is the last resort:
+ * it ships the harness's whole dependency closure, so it can supply the
+ * packages before DSH's first start has healed <home>/profiles/node_modules.
  */
 function dshModuleRoots(home) {
   const roots = [];
@@ -621,6 +632,58 @@ function dshModuleRoots(home) {
     }
   }
   if (process.env.MY_WORKBENCH_DSH_NODE_MODULES) roots.push(process.env.MY_WORKBENCH_DSH_NODE_MODULES);
+  roots.push(...dshLauncherModuleRoots());
+  return roots;
+}
+
+/**
+ * node_modules roots derived from the `dsh` launcher found on PATH — [] when
+ * there is none. npm ships the harness with its dependency closure bundled
+ * inside the package, so the launcher's install tree carries @deepseek-ai/*
+ * even before DSH's first start populates <DSH_HOME>/profiles/node_modules.
+ * Purely filesystem-based: launchers are located and resolved, never executed.
+ * Only directories that exist are returned, and the scan runs once per process.
+ */
+const launcherRootsMemo = {};
+function dshLauncherModuleRoots() {
+  if (launcherRootsMemo.value !== undefined) return launcherRootsMemo.value;
+  const roots = [];
+  const seen = new Set();
+  const push = (root) => {
+    if (seen.has(root) || !existsSync(root)) return;
+    seen.add(root);
+    roots.push(root);
+  };
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (dir === "") continue;
+    for (const base of ["dsh", "dsh.cmd", "dsh.exe", "dsh.ps1"]) {
+      const launcher = join(dir, base);
+      if (!existsSync(launcher)) continue;
+      // npm shim layout (Windows): the launcher sits beside node_modules/,
+      // which holds the harness package with its bundled closure nested inside.
+      const sibling = join(dir, "node_modules");
+      push(sibling);
+      push(join(sibling, "@deepseek-ai", "dsh", "node_modules"));
+      // Symlink layout (unix): the resolved launcher sits inside the package;
+      // walk up to every node_modules above it and to the bundled closure of
+      // the @deepseek-ai/dsh package itself.
+      let real = launcher;
+      try {
+        real = realpathSync(launcher);
+      } catch {
+        // an unreadable launcher still leaves the sibling candidates above
+      }
+      let cur = dirname(real);
+      for (;;) {
+        if (basename(cur) === "node_modules") push(cur);
+        if (basename(cur) === "dsh" && basename(dirname(cur)) === "@deepseek-ai") push(join(cur, "node_modules"));
+        const parent = dirname(cur);
+        if (parent === cur) break;
+        cur = parent;
+      }
+    }
+  }
+  launcherRootsMemo.value = roots;
   return roots;
 }
 
@@ -665,17 +728,23 @@ function resolveDshPackage(packageName, home) {
 
 /**
  * Resolve every {{dep:<alias>}} to an absolute file: URL. Throws before any
- * write when a package cannot be found, and names the manual fallback.
+ * write when a package cannot be found, and names what was searched plus the
+ * ways to make the package appear.
  */
 function resolveLaneDependencies(home) {
   const specifiers = {};
   for (const [alias, packageName] of Object.entries(DSH_LANE_PLUGIN_DEPS)) {
     const found = resolveDshPackage(packageName, home);
     if (found === undefined) {
+      const launcherNote =
+        dshLauncherModuleRoots().length === 0
+          ? "no 'dsh' launcher was found on PATH"
+          : "the 'dsh' install on PATH was searched too but does not carry it";
       throw new Error(
         `cannot resolve '${packageName}' for the DSH lane plugin; searched: ${dshModuleRoots(home).join(", ")}. ` +
-          "Start DSH once so it heals <DSH_HOME>/profiles/node_modules, or link the package into the preset by hand " +
-          "(docs/dsh-lane-plugin/PLAN.md §5).",
+          `${launcherNote}. Start DSH once so it heals <DSH_HOME>/profiles/node_modules, set ` +
+          "MY_WORKBENCH_DSH_NODE_MODULES to a node_modules that carries the package, or link the package into " +
+          "the preset by hand (docs/dsh-lane-plugin/PLAN.md §5).",
       );
     }
     specifiers[alias] = pathToFileURL(found.file).href;

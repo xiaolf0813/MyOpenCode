@@ -307,11 +307,20 @@ Resolution order (`dshModuleRoots` → `resolveDshPackage`), most specific first
    only `schemastery` is present in the first (a real pnpm-managed directory);
    `dsh-tools` is absent, so step 1 is what makes `defineTool` importable here.
 3. `MY_WORKBENCH_DSH_NODE_MODULES` — an explicit override for other layouts.
+4. The `dsh` launcher's own npm install, located on PATH and never executed — the last
+   resort (`dshLauncherModuleRoots`). The harness ships its dependency closure bundled
+   inside the package, so `<install>/node_modules/@deepseek-ai/dsh/node_modules` carries
+   both packages even before DSH's first start heals `<DSH_HOME>/profiles/node_modules`.
+   Both layouts are covered: an npm shim beside `node_modules/` (Windows) and a symlink
+   resolved into the package tree (unix). Added after a fresh deployment hit the gap:
+   `~/.dsh` existed (the "DSH is not installed" prereq passed) but DSH had never
+   started there, so 1–3 were all empty and the install refused.
 
 The entry file comes from the package's own manifest (`exports["."]`, preferring
 `default` then `import` then `require`, else `module`/`main`), which is what selects
 schemastery's ESM build rather than its CJS one. When nothing resolves, the install
-**fails before the first write** and names every path it searched.
+**fails before the first write**, names every path it searched, and reports whether a
+`dsh` launcher was found on PATH at all.
 
 This is why the user runs no dependency command, and why the install tree is
 self-contained: the only machine-specific text in it is those two URLs.
