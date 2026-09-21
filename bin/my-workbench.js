@@ -1202,6 +1202,18 @@ function applyDsh(opts, counts) {
  * into this repository's live .opencode/ directory (this repo self-hosts omos).
  * In check mode, only reports drift.
  */
+function renderOpencodeAsset(backendName, rel, source) {
+  const normalized = rel.replaceAll("\\", "/");
+  if (backendName !== "omos" || normalized !== "oh-my-opencode-slim/orchestrator_append.md") return source;
+
+  const marker = "{{disciplines}}";
+  if (!source.includes(marker)) {
+    throw new Error("agents/backends/omos/oh-my-opencode-slim/orchestrator_append.md must contain {{disciplines}}");
+  }
+  const disciplines = readFileSync(join(PKG_ROOT, "agents", "disciplines.md"), "utf8").replace(/\s+$/, "");
+  return source.replace(marker, disciplines);
+}
+
 function syncOpencodeAssets({ check }) {
   const destRoot = join(PKG_ROOT, ".opencode");
   let drifted = 0;
@@ -1213,7 +1225,7 @@ function syncOpencodeAssets({ check }) {
       if (rel === "agents.json") return; // assembly metadata, not a target asset
       if (rel.startsWith("slots/")) return; // {{slot:...}} texts, not runtime assets
       const dest = join(destRoot, rel);
-      const content = readFileSync(fileAbs, "utf8");
+      const content = renderOpencodeAsset(backendName, rel, readFileSync(fileAbs, "utf8"));
       const current = existsSync(dest) ? readFileSync(dest, "utf8") : null;
       if (current === content) return;
       drifted++;
