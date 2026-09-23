@@ -3,7 +3,7 @@
     "ui-designer": {
       "frontmatter": [
         "name: ui-designer",
-        "description: Pure UI design specialist. Produces design specs and self-contained HTML mockups that show how interfaces should look, feel, and behave - never edits app source. Use before implementing new screens, redesigns, or visual polish; fixer implements the design in the app. Not for implementation of any kind.",
+        "description: \"Pure UI design specialist. Produces design specs and self-contained HTML mockups that show how interfaces should look, feel, and behave - never edits app source. Use before implementing new screens, redesigns, or visual polish; fixer implements the design in the app. Not for implementation of any kind.\"",
         "tools: Read, Write, Edit, Glob, Grep",
         "model: opus"
       ]
@@ -11,7 +11,7 @@
     "explorer": {
       "frontmatter": [
         "name: explorer",
-        "description: Fast codebase search and pattern matching specialist. Use PROACTIVELY for finding files, locating code patterns, and answering \"where is X?\" questions when scope is broad or uncertain, before planning or editing.",
+        "description: \"Fast codebase search and pattern matching specialist. Use PROACTIVELY for finding files, locating code patterns, and answering \\\"where is X?\\\" questions when scope is broad or uncertain, before planning or editing.\"",
         "tools: Glob, Grep, Read, Bash",
         "model: haiku"
       ]
@@ -19,7 +19,7 @@
     "fixer": {
       "frontmatter": [
         "name: fixer",
-        "description: Fast implementation specialist. Receives complete context and a task spec from the orchestrator, then executes bounded code changes efficiently. Use for well-defined mechanical or multi-file edits with parallelizable scope, including UI implementation from a ui-designer mockup/spec. Not for research, architecture, debugging strategy, or authoring visual designs (commission ui-designer first).",
+        "description: \"Fast implementation specialist. Receives complete context and a task spec from the orchestrator, then executes bounded code changes efficiently. Use for well-defined mechanical or multi-file edits with parallelizable scope, including UI implementation from a ui-designer mockup/spec. Not for research, architecture, debugging strategy, or authoring visual designs (commission ui-designer first).\"",
         "tools: Read, Write, Edit, Glob, Grep, Bash, NotebookEdit",
         "model: sonnet"
       ]
@@ -27,7 +27,7 @@
     "librarian": {
       "frontmatter": [
         "name: librarian",
-        "description: External documentation and library research specialist. Use PROACTIVELY when working with unfamiliar libraries, fast-moving APIs (React, Next.js, AI SDKs, ORMs, auth), version-specific behavior, edge cases, or tricky bugs that need current official docs, GitHub examples, or web research.",
+        "description: \"External documentation and library research specialist. Use PROACTIVELY when working with unfamiliar libraries, fast-moving APIs (React, Next.js, AI SDKs, ORMs, auth), version-specific behavior, edge cases, or tricky bugs that need current official docs, GitHub examples, or web research.\"",
         "tools: WebSearch, WebFetch, Bash, Read, Grep, Glob",
         "model: sonnet"
       ]
@@ -35,7 +35,7 @@
     "observer": {
       "frontmatter": [
         "name: observer",
-        "description: Visual analysis specialist. Use when a task involves images, screenshots, PDFs, or diagrams - extracts structured observations (UI elements, layouts, exact text via OCR) without loading raw image/PDF bytes into the orchestrator context. Always pass the full file path in the prompt. Requires a vision-capable model.",
+        "description: \"Visual analysis specialist. Use when a task involves images, screenshots, PDFs, or diagrams - extracts structured observations (UI elements, layouts, exact text via OCR) without loading raw image/PDF bytes into the orchestrator context. Always pass the full file path in the prompt. Requires a vision-capable model.\"",
         "tools: Read, Glob, Grep",
         "model: sonnet"
       ]
@@ -43,7 +43,7 @@
     "oracle": {
       "frontmatter": [
         "name: oracle",
-        "description: Strategic technical advisor and senior code reviewer. Use for escalations where being wrong is costly - major architectural decisions with long-term impact, problems persisting after 2+ fix attempts, complex debugging with unclear root cause, high-risk multi-system refactors, and code needing simplification or YAGNI scrutiny. Not for routine verification or first-attempt fixes.",
+        "description: \"Strategic technical advisor and senior code reviewer. Use for escalations where being wrong is costly - major architectural decisions with long-term impact, problems persisting after 2+ fix attempts, complex debugging with unclear root cause, high-risk multi-system refactors, and code needing simplification or YAGNI scrutiny. Not for routine verification or first-attempt fixes.\"",
         "tools: Glob, Grep, Read, Bash",
         "model: opus"
       ]
@@ -51,14 +51,14 @@
     "orchestrator": {
       "frontmatter": [
         "name: orchestrator",
-        "description: Multi-agent workflow manager - plans, schedules, delegates, monitors, reconciles, and verifies specialist-agent work instead of implementing serially. Set as the main-thread agent via settings.json (\"agent\": \"orchestrator\"); handles non-trivial coding work by routing bounded lanes to explorer/librarian/oracle/ui-designer/fixer/observer.",
+        "description: \"Multi-agent workflow manager - plans, schedules, delegates, monitors, reconciles, and verifies specialist-agent work instead of implementing serially. Set as the main-thread agent via settings.json (\\\"agent\\\": \\\"orchestrator\\\"); handles non-trivial coding work by routing bounded lanes to explorer/librarian/oracle/ui-designer/fixer/observer.\"",
         "model: inherit"
       ]
     },
     "improver": {
       "frontmatter": [
         "name: improver",
-        "description: Retrospective analyst for agent failures: traces which agent produced unsatisfactory completed work, diagnoses the root cause, and proposes omos prompt/config fixes pending user confirmation. Use ONLY when the user reports that previously completed work is wrong or unsatisfactory - not for ordinary code bugs, new feature work, or in-progress verification.",
+        "description: \"Retrospective analyst for agent failures: traces which agent produced unsatisfactory completed work, diagnoses the root cause, and proposes omos prompt/config fixes pending user confirmation. Use ONLY when the user reports that previously completed work is wrong or unsatisfactory - not for ordinary code bugs, new feature work, or in-progress verification.\"",
         "tools: Read, Glob, Grep",
         "model: opus"
       ]
