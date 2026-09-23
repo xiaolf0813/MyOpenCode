@@ -1228,6 +1228,53 @@ function applyDsh(opts, counts) {
 }
 
 
+// ── Response Convention sync assertion ──────────────────────────────────────
+
+/**
+ * The orchestrator's user-facing reply convention is authored twice: in the
+ * shared prompt body and again in the omos prompt override. Nothing else
+ * keeps the copies in step, so the omos append render asserts they still
+ * agree — heading depth, line wrapping and blank-line-only differences are
+ * ignored, any other divergence fails the assemble.
+ */
+
+/**
+ * Whitespace-normalized body of the one `Response Convention` section in one
+ * file: everything after the heading until the next ATX heading (or EOF),
+ * minus standalone `{{...}}` template placeholder lines, all whitespace
+ * collapsed so depth, re-wrapping and blank lines compare equal — except that
+ * lines OPENING a list item carry a sentinel, so merging or splitting list
+ * items is structural, not formatting, and fails.
+ */
+function responseConventionBody(rel) {
+  const lines = readFileSync(join(PKG_ROOT, rel), "utf8").split("\n");
+  const at = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (/^#{1,6}\s+Response Convention\s*$/.test(lines[i])) at.push(i);
+  }
+  if (at.length === 0) throw new Error(`${rel} has no 'Response Convention' heading`);
+  if (at.length > 1) throw new Error(`${rel} has ${at.length} 'Response Convention' headings; expected exactly one`);
+  const body = [];
+  for (let i = at[0] + 1; i < lines.length && !/^#{1,6}(\s|$)/.test(lines[i]); i++) body.push(lines[i]);
+  const text = body
+    .filter((line) => !/^\s*\{\{[\w:-]+\}\}\s*$/.test(line))
+    .map((line) => (/^\s*(?:[-*+]|\d+[.)])[ \t]/.test(line) ? `\x00${line}` : line))
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (text === "") throw new Error(`${rel} has an empty 'Response Convention' section`);
+  return text;
+}
+
+/** Fail the assemble unless both authored copies of the convention agree. */
+function assertResponseConventionSync() {
+  const prompt = "agents/prompts/orchestrator.md";
+  const append = "agents/backends/omos/oh-my-opencode-slim/orchestrator_append.md";
+  if (responseConventionBody(prompt) !== responseConventionBody(append)) {
+    throw new Error(`'Response Convention' diverges between ${prompt} and ${append} (heading depth, line wrapping and blank lines are ignored); align the two copies`);
+  }
+}
+
 /**
  * Sync the distributable OpenCode assets from agents/backends/{opencode,omos}/
  * into this repository's live .opencode/ directory (this repo self-hosts omos).
@@ -1236,6 +1283,8 @@ function applyDsh(opts, counts) {
 function renderOpencodeAsset(backendName, rel, source) {
   const normalized = rel.replaceAll("\\", "/");
   if (backendName !== "omos" || normalized !== "oh-my-opencode-slim/orchestrator_append.md") return source;
+
+  assertResponseConventionSync();
 
   const marker = "{{disciplines}}";
   if (!source.includes(marker)) {
