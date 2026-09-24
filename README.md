@@ -43,6 +43,16 @@ npx my-workbench assemble [--check] # in this repo: regenerate .claude/agents/ a
 
 Existing files are skipped unless `--force` is given, so re-running is safe.
 
+## Version management
+
+Every install — and `assemble` in this repository — writes a small stamp file recording the version of the CLI that deployed there, **one per deployment realm**: `my-workbench.version` in the project root for project-level runs, and `~/.my-workbench.version` for user-level runs (`--user`, or the always-user-level ZCode/DSH/OpenBitFun targets). A mixed run (e.g. `npx my-workbench --claude --zcode`) stamps both. The stamp is refreshed unconditionally on every run, so it always names the running version.
+
+```bash
+npx my-workbench --upgrade   # compare deployed versions with the npm latest
+```
+
+`--upgrade` compares each selected realm's stamp with the latest version on the npm registry (`npm_config_registry` is respected; it defaults to `https://registry.npmjs.org`). When a stamp is outdated it **auto-upgrades**: it re-runs the install as `npx --yes my-workbench@latest [<targets>] [--user] --force` — the redeploy overwrites the deployed files (intentional for an upgrade) and needs `npm`/`npx` on PATH. A deployment that is numerically newer than the registry latest is left untouched. `--upgrade` exits `0` only when every checked stamp matches the latest after the run; it exits `1` on a registry error, when no stamp exists at all (run the install first), or when the redeploy fails.
+
 ## User-level install
 
 `npx my-workbench --user` installs the same assets at user level instead of the current project: OpenCode/omos assets go to `~/.config/opencode/` (its XDG config directory; global agents are read from `~/.config/opencode/agents/`) and Claude Code assets to `~/.claude/` (`settings.json` + `agents/*.md`). User-level files apply to every project and are not meant for version control; on name conflicts project-level agents win over user-level ones. ZCode is always user-level and ignores `--user`.

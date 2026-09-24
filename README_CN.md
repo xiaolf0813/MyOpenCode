@@ -45,6 +45,16 @@ npx my-workbench assemble [--check] # 本仓库内：重新生成 .claude/agents
 
 除非给出 `--force`，已存在的文件会被跳过，因此重复运行是安全的。
 
+## 版本管理
+
+每次安装（以及本仓库内的 `assemble`）都会写入一个小的标记文件，记录部署该处的 CLI 版本，**每个部署域（realm）一个**：项目级运行写在项目根目录的 `my-workbench.version`，用户级运行（`--user`，或恒为用户级的 ZCode/DSH/OpenBitFun 目标）写在 `~/.my-workbench.version`。混合运行（如 `npx my-workbench --claude --zcode`）会同时写两个。该标记每次运行都会无条件刷新，因此始终是当前运行版本。
+
+```bash
+npx my-workbench --upgrade   # compare deployed versions with the npm latest
+```
+
+`--upgrade` 将所选各域的标记与 npm registry 上的最新版本比较（尊重 `npm_config_registry`，默认为 `https://registry.npmjs.org`）。发现过期的标记时会**自动升级**：以 `npx --yes my-workbench@latest [<targets>] [--user] --force` 重新运行安装 —— 重新部署会覆盖已部署的文件（对升级而言是有意为之），且需要 PATH 上有 `npm`/`npx`。数值上比 registry 最新版本更新的部署不会被改动。仅当运行结束后所有被检查的标记都与最新版本一致时 `--upgrade` 退出码为 `0`；registry 错误、完全找不到标记（请先运行安装）、或重新部署失败时退出码为 `1`。
+
 ## 用户级安装
 
 `npx my-workbench --user` 将同样的资产安装到用户级而非当前项目：OpenCode/omos 资产进入 `~/.config/opencode/`（其 XDG 配置目录；全局 agents 从 `~/.config/opencode/agents/` 读取），Claude Code 资产进入 `~/.claude/`（`settings.json` + `agents/*.md`）。用户级文件对所有项目生效，不用于版本控制；命名冲突时项目级 agents 优先于用户级。ZCode、DSH 与 OpenBitFun 恒为用户级，忽略 `--user`。

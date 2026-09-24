@@ -22,6 +22,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+/** Stamp file written once per deployment realm; --upgrade reads it back. */
+const VERSION_FILE = "my-workbench.version";
+
+/** The user-realm stamp, hidden in the home directory like every other user-level file. */
+const HOME_VERSION_FILE = `.${VERSION_FILE}`;
+
+/** The running package version, from the package.json shipped beside this CLI. */
+const PKG_VERSION = JSON.parse(readFileSync(join(PKG_ROOT, "package.json"), "utf8")).version;
+
 /** npm package name of the omos plugin; detected at user level (~/.config/opencode) to gate the omos target. */
 const OMOS_PACKAGE = "oh-my-opencode-slim";
 
@@ -192,6 +201,15 @@ Options
                           OpenBitFun are always user-level and ignore this flag)
   --force                 overwrite files that already exist (default: skip them)
   --dry-run               print what would be copied without writing anything
+  --upgrade               compare the deployment stamps (my-workbench.version
+                          in the project root, ~/.my-workbench.version for
+                          user-level deploys) with the npm registry latest
+                          (npm_config_registry respected); when a stamp is
+                          outdated it auto-upgrades by re-running
+                          "npx --yes my-workbench@latest [<targets>] --force"
+                          — deployed files are overwritten, and npm must be
+                          on PATH; exits 1 on a registry error, no stamps
+                          found, or a failed redeploy
   -h, --help              show this help
 
 Notes
@@ -253,6 +271,12 @@ Notes
   OpenBitFun install. Skips existing files unless --force, downloads
   nothing, and changes are picked up after restarting OpenBitFun.
 
+  Every install and assemble also stamps my-workbench.version (the running
+  version, refreshed unconditionally) once per deployment realm — the project
+  root for project-level runs, ~/.my-workbench.version for user-level runs;
+  --upgrade compares those stamps with the npm registry latest and
+  auto-upgrades outdated deployments via npx.
+
 Examples
   npx my-workbench                    # copy both .opencode/ and .claude/
   npx my-workbench --opencode         # OpenCode setup only
@@ -262,6 +286,7 @@ Examples
   npx my-workbench --zcode            # ZCode user-level setup only (~/.zcode)
   npx my-workbench --dsh              # DSH agent preset only (~/.dsh)
   npx my-workbench --openbitfun       # OpenBitFun user-level agents only
+  npx my-workbench --upgrade          # compare deployed versions, auto-upgrade when outdated
 `;
 
 function parseArgs(argv) {
@@ -279,6 +304,7 @@ function parseArgs(argv) {
   let force = false;
   let dryRun = false;
   let user = false;
+  let upgrade = false;
 
   for (const arg of argv) {
     switch (arg) {
@@ -315,6 +341,9 @@ function parseArgs(argv) {
       case "--dry-run":
         dryRun = true;
         break;
+      case "--upgrade":
+        upgrade = true;
+        break;
       case "-h":
       case "--help":
         return { help: true };
@@ -327,11 +356,19 @@ function parseArgs(argv) {
     throw new Error(`--omos cannot be combined with --opencode; --opencode already installs the omos way when a user-level omos install is detected\n\n${HELP}`);
   }
 
+  if (upgrade && (force || dryRun)) {
+    throw new Error(`--upgrade cannot be combined with --force or --dry-run: it reads version stamps and copies nothing\n\n${HELP}`);
+  }
+
+  // What the user named, before the default set fills in — --upgrade rebuilds
+  // its child command line from this, so a plain --upgrade re-deploys the
+  // default set and an explicit target re-deploys exactly that target.
+  const explicitTargets = new Set(targets);
   if (targets.size === 0) {
     targets.add("opencode");
     targets.add("claude");
   }
-  return { targets, force, dryRun, user };
+  return { targets, explicitTargets, force, dryRun, user, upgrade };
 }
 
 function walk(root, dir, onFile) {
@@ -386,6 +423,21 @@ function writeAgent(dest, content, { force, dryRun, displayRoot = process.cwd(),
   }
   counts[exists ? "overwritten" : "created"]++;
   console.log(`  ${exists ? "overwrite" : "create   "}  ${rel}${dryRun ? "  (dry-run)" : ""}`);
+}
+
+/**
+ * Stamp the given file with the running package version. Unlike
+ * copyOne/writeAgent the stamp is ALWAYS rewritten — it names the version that
+ * just deployed these files, so force has no say; dryRun prints the line
+ * without writing. displayRoot/displayPrefix only control the label, as there.
+ */
+function stampVersionFile(dest, { displayRoot = process.cwd(), displayPrefix = "" }, opts) {
+  const rel = displayPrefix + relative(displayRoot, dest);
+  if (!opts.dryRun) {
+    mkdirSync(dirname(dest), { recursive: true });
+    writeFileSync(dest, `${PKG_VERSION}\n`);
+  }
+  console.log(`  stamp      ${rel}  (${PKG_VERSION})${opts.dryRun ? "  (dry-run)" : ""}`);
 }
 
 /**
@@ -1341,6 +1393,20 @@ async function assembleCommand({ check }) {
 
   outdated += syncOpencodeAssets({ check });
 
+  // The stamp names the version that generated these trees; --check compares
+  // it too, so a version bump alone still shows up as drift.
+  const stamp = join(PKG_ROOT, VERSION_FILE);
+  if (check) {
+    const current = existsSync(stamp) ? readFileSync(stamp, "utf8") : null;
+    if (current !== `${PKG_VERSION}\n`) {
+      console.log(`outdated: ${VERSION_FILE}`);
+      outdated++;
+    }
+  } else {
+    writeFileSync(stamp, `${PKG_VERSION}\n`);
+    console.log(`stamped: ${VERSION_FILE}`);
+  }
+
   // The OpenBitFun agents install at user level, so no generated file lives in
   // this repository to regenerate or compare. Render them anyway: a prompt body
   // this tree no longer has, a roster entry that references it, or an
@@ -1436,6 +1502,146 @@ async function assembleCommand({ check }) {
   }
 }
 
+/**
+ * Numeric x.y.z compare with prerelease tags ignored ("1.2.3-beta.4" is 1.2.3):
+ * negative when `a` is older, 0 when equal, positive when `a` is newer.
+ * Unparsable segments count as 0, so junk never looks newer than a real release.
+ */
+function compareVersions(a, b) {
+  const numbers = (v) => String(v).replace(/-.*$/, "").split(".").map((part) => parseInt(part, 10) || 0);
+  const left = numbers(a);
+  const right = numbers(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * `my-workbench --upgrade`: compare the deployment realm stamps with the npm
+ * registry's latest, and auto-upgrade when one is behind: re-run the install
+ * as "npx --yes my-workbench@latest [<targets>] [--user] --force" — an upgrade
+ * must overwrite the assets it supersedes — then re-read the stamps and verify.
+ * main runs it before the prerequisite gates; its only write is that child run.
+ */
+async function upgradeCommand(opts) {
+  const home = homedir();
+  // One stamp per deployment realm, at most two: the project root for
+  // project-level targets, the home directory for --user and the
+  // user-level-only targets (zcode/dsh/openbitfun). A mixed selection checks both.
+  const projectTargets = ["opencode", "omos", "claude"].filter((name) => opts.targets.has(name));
+  const userLevelOnly = ["zcode", "dsh", "openbitfun"].filter((name) => opts.targets.has(name));
+  const roots = [];
+  if (projectTargets.length > 0 && !opts.user) {
+    roots.push({ file: join(process.cwd(), VERSION_FILE), label: VERSION_FILE, was: null });
+  }
+  if ((projectTargets.length > 0 && opts.user) || userLevelOnly.length > 0) {
+    roots.push({ file: join(home, HOME_VERSION_FILE), label: `~/${HOME_VERSION_FILE}`, was: null });
+  }
+
+  // The registry IS the comparison's other half: without it there is nothing
+  // to report, so fail fast before reading any stamp.
+  const registry = (process.env.npm_config_registry || "https://registry.npmjs.org").replace(/\/+$/, "");
+  let latest;
+  try {
+    const res = await fetch(`${registry}/my-workbench/latest`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    if (typeof body?.version !== "string" || body.version === "") throw new Error("the response names no version");
+    latest = body.version;
+  } catch (err) {
+    console.error(`error: could not read the latest my-workbench version from ${registry}: ${err?.cause?.code ?? err?.cause?.message ?? err?.message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(`my-workbench: comparing deployment stamps with npm latest ${latest}`);
+  let found = 0;
+  const differing = [];
+  let stampDiffersFromCli = false;
+  for (const root of roots) {
+    if (!existsSync(root.file)) {
+      console.log(`  missing    ${root.label}  (not deployed from this CLI version; run the install to stamp it)`);
+      continue;
+    }
+    root.was = readFileSync(root.file, "utf8").trim();
+    found++;
+    if (root.was === latest) {
+      console.log(`  up-to-date ${root.label}  ${root.was}`);
+    } else {
+      differing.push(root);
+      console.log(`  outdated   ${root.label}  ${root.was} -> npm latest ${latest}`);
+    }
+    if (root.was !== PKG_VERSION) stampDiffersFromCli = true;
+  }
+
+  if (found === 0) {
+    // Missing stamps alone never trigger the redeploy: there is no deployment
+    // to upgrade, only an install the user has not run yet.
+    console.log(`  note       run the install first ("npx my-workbench"); --upgrade compares the stamps an install writes`);
+    console.log(`done: checked 0 deployment stamp(s) against npm latest ${latest}: none found`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (differing.length === 0) {
+    if (stampDiffersFromCli) console.log(`  note       this CLI is ${PKG_VERSION}; rerun the install to redeploy with it`);
+    if (PKG_VERSION !== latest) console.log(`  note       this CLI is ${PKG_VERSION}, npm latest is ${latest}`);
+    console.log(`done: checked ${found} deployment stamp(s) against npm latest ${latest}: all match`);
+    return;
+  }
+
+  // Auto-upgrade unless every differing stamp is numerically NEWER than the
+  // registry latest — an unpublished or dev deployment is not behind it.
+  const behind = differing.filter((root) => compareVersions(root.was, latest) < 0);
+  if (behind.length === 0) {
+    console.log(`  note       deployment is newer than npm latest; nothing to upgrade`);
+    if (PKG_VERSION !== latest) console.log(`  note       this CLI is ${PKG_VERSION}, npm latest is ${latest}`);
+    console.log(`done: checked ${found} deployment stamp(s) against npm latest ${latest}: ${differing.length} differ`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Rebuild the user's own target selection: explicit flags ride along, a
+  // plain --upgrade re-deploys the default set; --force is intentional — an
+  // upgrade must overwrite the assets it supersedes.
+  const args = ["--yes", `my-workbench@${latest}`];
+  for (const name of opts.explicitTargets) args.push(`--${name}`);
+  if (opts.user) args.push("--user");
+  args.push("--force");
+  console.log(`  upgrade    redeploying with npm latest ${latest} via npx (existing files are overwritten)`);
+  const child = spawnSync("npx", args, { stdio: "inherit", shell: process.platform === "win32" });
+  if (child.error !== undefined) {
+    console.error(`error: could not launch npx (${child.error.message}); auto-upgrade needs npm on PATH`);
+    process.exitCode = 1;
+    return;
+  }
+  if (child.status !== 0) {
+    console.error(`error: the redeploy exited with status ${String(child.status)}; deployments may be inconsistent, rerun "my-workbench --upgrade" after fixing it`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // The child's run rewrites the realm stamps; verify instead of trusting it.
+  let allMatch = true;
+  for (const root of roots) {
+    const deployed = existsSync(root.file) ? readFileSync(root.file, "utf8").trim() : null;
+    if (deployed === latest) {
+      console.log(root.was === latest ? `  up-to-date ${root.label}  ${deployed}` : `  upgraded   ${root.label}  ${root.was ?? "(was missing)"} -> ${deployed}`);
+    } else {
+      allMatch = false;
+      console.log(deployed === null ? `  missing    ${root.label}  (the redeploy did not stamp it)` : `  outdated   ${root.label}  ${deployed} != npm latest ${latest}`);
+    }
+  }
+  if (!allMatch) {
+    console.log(`done: redeployed with npm latest ${latest}, but a checked stamp still differs`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`done: redeployed with npm latest ${latest}: all checked stamps match`);
+}
+
 async function main() {
   let opts;
   try {
@@ -1451,6 +1657,12 @@ async function main() {
   }
   if (opts.command === "assemble") {
     await assembleCommand(opts);
+    return;
+  }
+  // --upgrade installs nothing in this process (a behind stamp is redeployed
+  // by the npx child it spawns), so the prerequisite gates below do not apply.
+  if (opts.upgrade) {
+    await upgradeCommand(opts);
     return;
   }
 
@@ -1536,6 +1748,14 @@ async function main() {
   if (opts.targets.has("zcode")) applyZcode(opts, counts);
   if (opts.targets.has("dsh")) applyDsh(opts, counts);
   if (opts.targets.has("openbitfun")) applyOpenbitfun(opts, counts);
+
+  // One stamp per deployment realm records what deployed there: the project
+  // root for project-level targets, the home directory for --user and the
+  // user-level-only targets. A mixed run (e.g. --claude --zcode) stamps both.
+  if (projectTargets.length > 0 && !opts.user) stampVersionFile(join(targetRoot, VERSION_FILE), opts, opts);
+  if ((projectTargets.length > 0 && opts.user) || userLevelOnly.length > 0) {
+    stampVersionFile(join(homedir(), HOME_VERSION_FILE), { ...opts, displayRoot: homedir(), displayPrefix: "~/" }, opts);
+  }
 
   console.log(`\ndone: ${counts.created} created, ${counts.overwritten} overwritten, ${counts.skipped} skipped.`);
   if (counts.created > 0 && !opts.dryRun) {

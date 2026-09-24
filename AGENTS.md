@@ -14,7 +14,7 @@
 | dsh | `--dsh` | `<DSH_HOME>/.agent-presets/my-workbench/` (`DSH_HOME`, else `~/.dsh`); requires an existing DSH home |
 | openbitfun | `--openbitfun` | `<OpenBitFun config>/agents/*.md` — Linux `~/.config/openbitfun` (`$XDG_CONFIG_HOME` respected), macOS `~/Library/Application Support/openbitfun`, Windows `%APPDATA%\openbitfun`; requires an existing OpenBitFun install |
 
-Every target downloads nothing and writes nothing inside a project; existing files are skipped unless `--force`.
+Every target downloads nothing and writes nothing inside a project except the version stamp; existing files are skipped unless `--force`. Every install and assemble stamps `my-workbench.version` once per deployment realm (`<cwd>/my-workbench.version` for project deploys, `~/.my-workbench.version` for user-level deploys) — written unconditionally, never subject to skip/`--force`. `--upgrade` compares those stamps with the npm registry latest and, when one is behind, auto-upgrades by redeploying via `npx my-workbench@latest --force` — the one deliberate download, and it overwrites deployed files by design.
 
 **opencode** requires an `opencode` binary on PATH. When a user-level omos install is detected, it installs the omos way instead (omits assets, no native agents) to avoid agent conflicts.
 
