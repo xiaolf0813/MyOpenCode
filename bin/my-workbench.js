@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep, basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -459,12 +459,27 @@ function copyEntries(set, entries, targetRoot, dest, opts, counts) {
     }
     if (statSync(src).isDirectory()) {
       walk(src, src, (fileAbs) =>
-        copyOne(fileAbs, join(targetRoot, dest, entry, relative(src, fileAbs)), opts, counts),
+        copyOneRendered(set, fileAbs, join(entry, relative(src, fileAbs)), join(targetRoot, dest, entry, relative(src, fileAbs)), opts, counts),
       );
     } else {
-      copyOne(src, join(targetRoot, dest, entry), opts, counts);
+      copyOneRendered(set, src, entry, join(targetRoot, dest, entry), opts, counts);
     }
   }
+}
+
+/**
+ * Copy one asset file. The omos orchestrator append renders its
+ * {{disciplines}} marker on every deployment scope — the marker must never
+ * ship raw outside this repository's source tree; everything else copies
+ * byte-for-byte.
+ */
+function copyOneRendered(set, src, backendRel, dest, opts, counts) {
+  const rel = backendRel.split(sep).join("/");
+  if (basename(set.from) === "omos" && rel === "oh-my-opencode-slim/orchestrator_append.md") {
+    writeAgent(dest, renderOpencodeAsset("omos", rel, readFileSync(src, "utf8")), opts, counts);
+    return;
+  }
+  copyOne(src, dest, opts, counts);
 }
 
 /** True when an omos install already exists at user level (~/.config/opencode). */
