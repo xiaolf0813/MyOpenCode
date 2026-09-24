@@ -60,21 +60,8 @@ window.__ModuleLoader__.load({
      */
     let remoteFaces = null
 
-    /**
-     * Display metadata for the seven lanes. `key` must match the host half's
-     * roster key (it is the settings dictionary key and the prompts key); `zh`
-     * is the display name shown beside it. This is UI text only — no prompt
-     * content and no route data lives here.
-     */
-    const LANES = [
-      { key: 'explorer', zh: '代码库导航' },
-      { key: 'librarian', zh: '外部文档研究' },
-      { key: 'oracle', zh: '架构评审' },
-      { key: 'ui-designer', zh: 'UI 设计' },
-      { key: 'fixer', zh: '实现' },
-      { key: 'observer', zh: '视觉分析' },
-      { key: 'improver', zh: '失败复盘' }
-    ]
+    // Rendered from agents/backends/dsh/lanes.json by the CLI.
+    const LANES = "__MY_WORKBENCH_LANES__"
 
     const CSS =
       '.mwl-page{padding:18px 0;display:flex;flex-direction:column;gap:14px;max-width:760px}' +
@@ -234,7 +221,7 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'mwl-page' },
           title,
           h('p', { className: 'mwl-note' }, '此会话未挂载 MyWorkbench 预设 —— 赛道模型设置仅在 MyWorkbench 会话中可用。'),
-          h('p', { className: 'mwl-note' }, '切换到 MyWorkbench 预设的会话后，这里会列出 7 条专家赛道的模型与推理等级。')
+          h('p', { className: 'mwl-note' }, '切换到 MyWorkbench 预设的会话后，这里会列出 ' + LANES.length + ' 条专家赛道的模型与推理等级。')
         )
       }
 
@@ -370,7 +357,7 @@ window.__ModuleLoader__.load({
 
       return h('div', { className: 'mwl-page' },
         title,
-        h('p', { className: 'mwl-intro' }, '为 7 条专家赛道分别固定模型与推理等级（左侧选模型，右侧选思考级别）。改动写入本插件的 settings 命名空间并持久化；留空则继承当前会话模型。'),
+        h('p', { className: 'mwl-intro' }, '为 ' + LANES.length + ' 条专家赛道分别固定模型与推理等级（左侧选模型，右侧选思考级别）。改动写入本插件的 settings 命名空间并持久化；留空则继承当前会话模型。'),
         rows,
         h('div', { className: 'mwl-actions' },
           h('button', { className: 'mwl-button mwl-buttonPrimary', disabled: busy, onClick: save }, '应用'),

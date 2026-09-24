@@ -84,12 +84,13 @@ Existing files are skipped unless `--force` is given, so re-running is safe.
 lane-plugin/                        # preset row: ./lane-plugin/src/index.js
 ├── package.json                    # name my-workbench-lanes (host only, no client half)
 ├── src/index.js                    # host half: the 7 delegation tools + the settings namespace
+├── src/roster.generated.js         # host lane fields, rendered from dsh/lanes.json
 └── src/prompts.generated.js        # the 7 prompts, rendered from agents/prompts/*.md
 
 lane-plugin-ui/                     # profile row: file:///…/lane-plugin-ui/src/index.js
 ├── package.json                    # name my-workbench-lanes-ui, exports "./client", dsh.client.platform "web"
 ├── src/index.js                    # inert host half: registers nothing at all
-└── lib/client.js                   # hand-written browser half: the settings page
+└── lib/client.js                   # settings page with display labels rendered from dsh/lanes.json
 ```
 
 - The host row's `name` is **relative** (`./lane-plugin/src/index.js`): a preset row's bare package name resolves from the host composition's base, not from the preset directory, so a package shipped alongside the composition would not be found.
@@ -142,42 +143,41 @@ Everything is generated from one tree, `agents/`:
 agents/
 ├── disciplines.md    # the universal disciplines, appended to every agent prompt at assembly
 ├── disciplines_cn.md # Chinese reference translation of disciplines.md (never packaged)
+├── roster.json       # agent descriptions and backend frontmatter, authored once
 ├── prompts/          # each agent prompt body, once (attribution notice kept here, dropped when assembled)
 ├── prompts_cn/       # Chinese reference translations (never packaged)
 └── backends/         # everything backend-specific; each backend may carry slots/*.md
                       # (per-backend text substituted for {{slot:...}} placeholders in agents/prompts/)
     ├── claude/
     │   ├── settings.json   # main-thread agent setting
-    │   └── agents.json     # per-agent frontmatter (name/tools/model)
+    │   └── slots/          # Claude-specific prompt text
     ├── opencode/
-    │   ├── agents.json           # per-agent frontmatter (description/mode/tools)
+    │   ├── slots/                # OpenCode-specific prompt text
     │   └── opencode.jsonc        # core config
     ├── omos/
     │   ├── oh-my-opencode-slim.jsonc       # omos project config
     │   ├── oh-my-opencode-slim/  # prompt overrides (<agent>_append.md)
     │   └── package.json          # plugin node dependencies
     ├── zcode/
-    │   ├── agents.json     # per-agent frontmatter fields (description/model/injectAgentsMd)
     │   └── slots/          # dispatch.md (every backend has it; not enumerated here)
     ├── openbitfun/
-    │   ├── agents.json     # per-agent frontmatter (schema_version/kind/id/name/description/tools/readonly)
     │   └── slots/          # dispatch.md ({{slot:dispatch}} inside the orchestrator prompt)
     └── dsh/
+        ├── lanes.json        # lane keys, tools, labels, permissions and model defaults
         ├── agent.cordis.yml  # preset composition; {{prompt:<agent>}} embeds prompts/<agent>.md
         ├── preset.yml        # preset display metadata (name/description)
         ├── lane-plugin/      # the preset-mounted HOST half (design record: docs/dsh-lane-plugin/)
-        │   ├── prompts.template.js    # {{prompt:<agent>}} per lane -> src/prompts.generated.js
         │   └── host-package/          # ESM plugin package: 7 lane tools + settings namespace
         │       ├── package.json
         │       └── src/index.js       # {{dep:<alias>}} is resolved to a file: URL at install
         ├── lane-plugin-ui/   # the profile-mounted settings PAGE
         │   ├── package.json           # exports "./client", dsh.client.platform "web"
         │   ├── src/index.js           # inert host half (registers nothing)
-        │   └── lib/client.js          # hand-written browser half
+        │   └── lib/client.js          # browser half with a rendered lane roster
         └── slots/            # dispatch.md ({{slot:dispatch}} inside the orchestrator prompt)
 ```
 
-In your project, `.claude/agents/` and `.opencode/` are assembled from it. Edit `agents/`, then run `npx my-workbench assemble` (`--check` detects drift) — the same workflow works in this repository and in any target project. Prompt bodies may reference `{{slot:<name>}}` placeholders; each backend supplies their text in `agents/backends/<backend>/slots/`, and a slot referenced by a prompt but missing for a backend fails assembly. A backend template — `agents/backends/dsh/agent.cordis.yml` — may also reference `{{prompt:<agent>}}`, which embeds that whole prompt body in place instead of duplicating it; the lane plugin's `prompts.template.js` uses the same placeholder, rendered into a JS data module rather than a YAML block. `assemble --check` renders both, the eight OpenBitFun agents, and also proves that the prompt template, the host roster and the settings page name the same seven lanes, that both host modules parse, that the page's package declares the `dsh.client`/`./client` pair DSH scans for with a module id matching its name, that its `require` list stays inside the shell's nine seed modules, and that its inert host half imports and registers nothing — so a placeholder this tree can no longer resolve, or a `require` the browser could never answer, fails the check rather than the install or a DSH session.
+In your project, `.claude/agents/` and `.opencode/` are assembled from it. Edit `agents/`, then run `npx my-workbench assemble` (`--check` detects drift) — the same workflow works in this repository and in any target project. `agents/roster.json` supplies descriptions and backend frontmatter, and the check rejects orphan prompt bodies. Prompt bodies may reference `{{slot:<name>}}` placeholders; each backend supplies their text in `agents/backends/<backend>/slots/`, and a slot referenced by a prompt but missing for a backend fails assembly. The DSH composition embeds `{{prompt:<agent>}}`; `agents/backends/dsh/lanes.json` drives the installed lane prompt module, host roster and settings page labels. `assemble --check` renders these and the eight OpenBitFun agents, checks the page's `dsh.client`/`./client` declaration and browser imports, and imports its inert host half.
 
 ## Attribution
 

@@ -6,18 +6,18 @@
 // user-level targets always use the home directory.
 
 import { spawnSync } from "node:child_process";
+import { resolveLaneDependencies } from "./dsh-deps.js";
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { basename, delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,12 +97,22 @@ const DSH_LANE_PLUGIN_DEPS = {
   schemastery: "@deepseek-ai/schemastery",
 };
 
-/**
- * Lane keys the generated prompt module, the host half's roster and the client
- * half's page must all agree on. Kept here so `assemble --check` can prove the
- * three agree without importing any of them.
- */
-const DSH_LANE_KEYS = ["explorer", "librarian", "oracle", "ui-designer", "fixer", "observer", "improver"];
+/** The DSH lane record is authored once and rendered for both plugin halves. */
+function dshLanes() {
+  const lanes = JSON.parse(readFileSync(join(PKG_ROOT, "agents", "backends", "dsh", "lanes.json"), "utf8"));
+  if (!Array.isArray(lanes) || lanes.length === 0) throw new Error("agents/backends/dsh/lanes.json must contain lanes");
+  const keys = new Set();
+  const tools = new Set();
+  for (const lane of lanes) {
+    if (!lane || !/^[\w-]+$/.test(lane.key) || !/^subagent_[\w_]+$/.test(lane.tool) || typeof lane.zh !== "string" || !lane.zh.trim()) throw new Error("invalid DSH lane record");
+    if (keys.has(lane.key) || tools.has(lane.tool)) throw new Error("duplicate DSH lane key or tool: " + lane.key);
+    if (typeof lane.denyWrites !== "boolean" || typeof lane.denyShell !== "boolean" || !lane.recommended || !["provider", "model", "reasoningEffort"].every((key) => typeof lane.recommended[key] === "string")) throw new Error("incomplete DSH lane: " + lane.key);
+    keys.add(lane.key);
+    tools.add(lane.tool);
+  }
+  return lanes;
+}
+const DSH_LANE_KEYS = dshLanes().map((lane) => lane.key);
 
 /**
  * The ONLY bare specifiers a client bundle may `require`. The browser shell
@@ -165,7 +175,7 @@ ZCode target (opt-in only; user-level, writes to your home directory)
 DSH target (opt-in only; user-level, writes to your DSH home)
   --dsh                   install the agent preset ~/.dsh/.agent-presets/
                           my-workbench/ (orchestrator + the lane plugin that
-                          owns the seven named specialist tools + their
+                          owns the ${DSH_LANE_KEYS.length} named specialist tools + their
                           model/reasoning-effort settings page; also writes ONE
                           managed inert row into your DSH profile patch layer so
                           the page can load; takes effect in new DSH sessions)
@@ -186,9 +196,9 @@ Options
 
 Notes
   The single source of truth is agents/: prompts/ holds each prompt body
-  once (with its omos attribution notice), and backends/<name>/ holds
-  everything backend-specific — assets plus per-agent header metadata in
-  agents.json. This repository's .claude/agents/ and .opencode/ are
+  once (with its omos attribution notice), roster.json holds agent
+  descriptions and backend frontmatter, and backends/<name>/ holds
+  target-specific assets. This repository's .claude/agents/ and .opencode/ are
   generated from it — edit agents/ and run "my-workbench assemble".
 
   OpenCode support is split into two targets. --opencode is the native
@@ -213,7 +223,7 @@ Notes
   writes an agent preset at <DSH_HOME>/.agent-presets/my-workbench/
   (DSH_HOME, else ~/.dsh) holding preset.yml, the orchestrator composition
   rendered from agents/backends/dsh/agent.cordis.yml, lane-plugin/ — a
-  packaged plugin whose single composition row owns the seven named
+  packaged plugin whose single composition row owns the ${DSH_LANE_KEYS.length} named
   delegation tools (subagent_explorer … subagent_improver) — and
   lane-plugin-ui/, the settings page. Each tool carries its specialist's
   prompt (rendered from agents/prompts/*.md into the plugin's generated prompt
@@ -426,11 +436,57 @@ function opencodeInstalled() {
 
 /**
  * Assemble one agent markdown file for a backend: its frontmatter lines from
- * agents/backends/<backend>.json joined with the shared prompt body from
- * agents/prompts/<name>.md (which carries the omos attribution notice).
+ * agents/roster.json supplies frontmatter for the shared prompt bodies.
  */
+function agentRoster() {
+  return JSON.parse(readFileSync(join(PKG_ROOT, "agents", "roster.json"), "utf8")).agents;
+}
+
+/** Render backend frontmatter from the one authored record per agent. */
 function loadBackend(name) {
-  return JSON.parse(readFileSync(join(PKG_ROOT, "agents", "backends", name, "agents.json"), "utf8"));
+  const agents = {};
+  for (const [agentName, record] of Object.entries(agentRoster())) {
+    const lines = record.frontmatter[name];
+    if (lines === undefined) continue;
+    agents[agentName] = {
+      frontmatter: lines.map((line) => line === "@description" ? `description: ${JSON.stringify(record.description)}` : line),
+    };
+  }
+  return { agents };
+}
+
+/** Orphan prompts and missing reference translations are source errors. */
+function agentSourceProblems() {
+  const problems = [];
+  const roster = agentRoster();
+  const names = new Set(Object.keys(roster));
+  for (const [name, record] of Object.entries(roster)) {
+    if (typeof record.description !== "string" || !record.description.trim()) problems.push(`agent '${name}' has no description`);
+    for (const backend of ["claude", "opencode", "zcode", "openbitfun"]) {
+      const lines = record.frontmatter?.[backend];
+      if (name === "orchestrator" && backend === "zcode" && lines === undefined) continue; // ZCode uses AGENTS.md as its main agent.
+      if (!Array.isArray(lines) || lines.filter((line) => line === "@description").length !== 1) problems.push(`agent '${name}' has invalid ${backend} frontmatter`);
+    }
+  }
+  const promptDir = join(PKG_ROOT, "agents", "prompts");
+  for (const file of readdirSync(promptDir).filter((file) => file.endsWith(".md"))) {
+    const name = file.slice(0, -3);
+    if (!names.has(name)) problems.push(`agents/prompts/${file} has no agent record`);
+  }
+  for (const name of names) {
+    if (!existsSync(join(promptDir, `${name}.md`))) problems.push(`agent '${name}' has no prompt body`);
+  }
+  // Reference translations are absent from the npm tarball, so check pairs only in a source checkout.
+  const cnDir = join(PKG_ROOT, "agents", "prompts_cn");
+  if (existsSync(cnDir)) {
+    for (const name of names) {
+      if (!existsSync(join(cnDir, `${name}_cn.md`))) problems.push(`agent '${name}' has no Chinese reference translation`);
+    }
+    for (const file of readdirSync(cnDir).filter((file) => file.endsWith("_cn.md"))) {
+      if (!names.has(file.slice(0, -6))) problems.push(`agents/prompts_cn/${file} has no agent record`);
+    }
+  }
+  return problems;
 }
 
 /**
@@ -638,41 +694,19 @@ function renderDshComposition(usedSlots) {
 
 // ── DSH lane plugin ─────────────────────────────────────────────────────────
 
-/**
- * Replace {{prompt:<agent>}} placeholders with that agent's prompt body as a
- * COMPLETE JSON string literal. This is the inline sibling of fillPrompts:
- * fillPrompts emits a YAML literal block indented to the placeholder's column
- * and therefore requires the placeholder to stand alone on its line, whereas the
- * lane plugin's generated prompt module stores each body as a JS value
- * (`explorer: {{prompt:explorer}},`).
- *
- * A quoted placeholder is rejected rather than silently double-quoted: the
- * replacement already carries its own quotes, so `'{{prompt:explorer}}'` would
- * produce `'"…"'`.
- *
- * The body is trimmed of trailing whitespace exactly as fillPrompts trims it, so
- * a persona is byte-identical whichever composition delivers it.
- */
-function fillPromptsJson(template, backendName, usedSlots) {
-  return template.replace(PROMPT_RE, (raw, agentName, offset, source) => {
-    const before = source[offset - 1];
-    const after = source[offset + raw.length];
-    if (before === "'" || before === '"' || after === "'" || after === '"') {
-      throw new Error(
-        `{{prompt:${agentName}}} in agents/backends/${backendName}/ must not be quoted: the replacement is already a complete JSON string literal`,
-      );
-    }
-    return JSON.stringify(fillSlots(agentPromptBody(agentName), backendName, usedSlots).replace(/\s+$/, ""));
+/** Render the plugin's personas from the authored lane keys and shared prompts. */
+function renderLanePrompts(usedSlots) {
+  const entries = dshLanes().map(({ key }) => {
+    const body = fillSlots(agentPromptBody(key), "dsh", usedSlots).replace(/\s+$/, "");
+    return `  ${JSON.stringify(key)}: ${JSON.stringify(body)}`;
   });
+  return `export const LANE_PROMPTS = {\n${entries.join(",\n")}\n}\n\nexport default LANE_PROMPTS\n`;
 }
 
-/** Render the lane plugin's prompt module from prompts.template.js (single source: agents/prompts/*.md). */
-function renderLanePrompts(usedSlots) {
-  const template = readFileSync(join(DSH_LANE_PLUGIN_SRC, "prompts.template.js"), "utf8");
-  const rendered = fillPromptsJson(template, "dsh", usedSlots);
-  const leftover = rendered.match(/\{\{[\w-]+:[\w@/.-]+\}\}/);
-  if (leftover) throw new Error(`agents/backends/dsh/lane-plugin/prompts.template.js left '${leftover[0]}' unfilled`);
-  return rendered;
+/** The host-only fields; the UI gets key and zh from the same record. */
+function laneRosterSource() {
+  const lanes = dshLanes().map(({ key, tool, denyWrites, denyShell, recommended }) => ({ key, tool, denyWrites, denyShell, recommended }));
+  return `export const LANES = ${JSON.stringify(lanes, null, 2)}\n`;
 }
 
 /** The lane plugin's host module template, unmodified. */
@@ -715,152 +749,9 @@ function laneManifest() {
 }
 
 /**
- * Candidate node_modules roots, most specific first. DSH maintains
- * <home>/profiles/node_modules as the installation dependency closure (a link
- * farm of the harness's own packages), each profile has its own pnpm-managed
- * node_modules, and .dsh-module-fallback holds the profile-owned links.
- * MY_WORKBENCH_DSH_NODE_MODULES appends an explicit root for deployments whose
- * layout differs, and the `dsh` launcher's own npm install is the last resort:
- * it ships the harness's whole dependency closure, so it can supply the
- * packages before DSH's first start has healed <home>/profiles/node_modules.
- */
-function dshModuleRoots(home) {
-  const roots = [];
-  const profilesDir = join(home, "profiles");
-  roots.push(join(profilesDir, "node_modules"));
-  if (existsSync(profilesDir)) {
-    for (const name of readdirSync(profilesDir).sort()) {
-      const dir = join(profilesDir, name);
-      if (!statSync(dir).isDirectory()) continue;
-      roots.push(join(dir, "node_modules"));
-      roots.push(join(dir, ".dsh-module-fallback", "node_modules"));
-    }
-  }
-  if (process.env.MY_WORKBENCH_DSH_NODE_MODULES) roots.push(process.env.MY_WORKBENCH_DSH_NODE_MODULES);
-  roots.push(...dshLauncherModuleRoots());
-  return roots;
-}
-
-/**
- * node_modules roots derived from the `dsh` launcher found on PATH — [] when
- * there is none. npm ships the harness with its dependency closure bundled
- * inside the package, so the launcher's install tree carries @deepseek-ai/*
- * even before DSH's first start populates <DSH_HOME>/profiles/node_modules.
- * Purely filesystem-based: launchers are located and resolved, never executed.
- * Only directories that exist are returned, and the scan runs once per process.
- */
-const launcherRootsMemo = {};
-function dshLauncherModuleRoots() {
-  if (launcherRootsMemo.value !== undefined) return launcherRootsMemo.value;
-  const roots = [];
-  const seen = new Set();
-  const push = (root) => {
-    if (seen.has(root) || !existsSync(root)) return;
-    seen.add(root);
-    roots.push(root);
-  };
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    if (dir === "") continue;
-    for (const base of ["dsh", "dsh.cmd", "dsh.exe", "dsh.ps1"]) {
-      const launcher = join(dir, base);
-      if (!existsSync(launcher)) continue;
-      // npm shim layout (Windows): the launcher sits beside node_modules/,
-      // which holds the harness package with its bundled closure nested inside.
-      const sibling = join(dir, "node_modules");
-      push(sibling);
-      push(join(sibling, "@deepseek-ai", "dsh", "node_modules"));
-      // Symlink layout (unix): the resolved launcher sits inside the package;
-      // walk up to every node_modules above it and to the bundled closure of
-      // the @deepseek-ai/dsh package itself.
-      let real = launcher;
-      try {
-        real = realpathSync(launcher);
-      } catch {
-        // an unreadable launcher still leaves the sibling candidates above
-      }
-      let cur = dirname(real);
-      for (;;) {
-        if (basename(cur) === "node_modules") push(cur);
-        if (basename(cur) === "dsh" && basename(dirname(cur)) === "@deepseek-ai") push(join(cur, "node_modules"));
-        const parent = dirname(cur);
-        if (parent === cur) break;
-        cur = parent;
-      }
-    }
-  }
-  launcherRootsMemo.value = roots;
-  return roots;
-}
-
-/** The file a package's own manifest points at for its root import, or undefined. */
-function packageEntryOf(manifest) {
-  const exportsField = manifest.exports;
-  const root =
-    exportsField !== null && typeof exportsField === "object" ? exportsField["."] ?? exportsField : exportsField;
-  if (typeof root === "string") return root;
-  if (root !== null && typeof root === "object") {
-    // "default" first, then the ESM condition: the lane plugin is an ESM module,
-    // so schemastery's `require` branch (lib/index.cjs) must not win.
-    for (const key of ["default", "import", "node", "require"]) {
-      if (typeof root[key] === "string") return root[key];
-    }
-  }
-  if (typeof manifest.module === "string") return manifest.module;
-  if (typeof manifest.main === "string") return manifest.main;
-  return undefined;
-}
-
-/** Resolve one deployment package to its absolute entry file, or undefined. */
-function resolveDshPackage(packageName, home) {
-  for (const root of dshModuleRoots(home)) {
-    const dir = join(root, packageName);
-    const manifestPath = join(dir, "package.json");
-    if (!existsSync(manifestPath)) continue;
-    let manifest;
-    try {
-      manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    } catch {
-      continue;
-    }
-    const entry = packageEntryOf(manifest);
-    if (entry === undefined) continue;
-    const file = join(dir, entry);
-    if (!existsSync(file)) continue;
-    return { file, root, version: manifest.version ?? "unknown" };
-  }
-  return undefined;
-}
-
-/**
- * Resolve every {{dep:<alias>}} to an absolute file: URL. Throws before any
- * write when a package cannot be found, and names what was searched plus the
- * ways to make the package appear.
- */
-function resolveLaneDependencies(home) {
-  const specifiers = {};
-  for (const [alias, packageName] of Object.entries(DSH_LANE_PLUGIN_DEPS)) {
-    const found = resolveDshPackage(packageName, home);
-    if (found === undefined) {
-      const launcherNote =
-        dshLauncherModuleRoots().length === 0
-          ? "no 'dsh' launcher was found on PATH"
-          : "the 'dsh' install on PATH was searched too but does not carry it";
-      throw new Error(
-        `cannot resolve '${packageName}' for the DSH lane plugin; searched: ${dshModuleRoots(home).join(", ")}. ` +
-          `${launcherNote}. Start DSH once so it heals <DSH_HOME>/profiles/node_modules, set ` +
-          "MY_WORKBENCH_DSH_NODE_MODULES to a node_modules that carries the package, or link the package into " +
-          "the preset by hand (docs/dsh-lane-plugin/PLAN.md §5).",
-      );
-    }
-    specifiers[alias] = pathToFileURL(found.file).href;
-  }
-  return specifiers;
-}
-
-/**
  * Structural validation of the lane plugin that needs neither a DSH home nor a
- * browser: the three lane tables (prompt template, host roster, settings page)
- * must agree on the same seven keys, and the host package's export must exist.
+ * browser: the authored lane keys must refer to agents, and the host package's
+ * export and generated roster import must exist.
  *
  * The settings page now lives in the profile-layer package; its own checks are
  * in {@link laneUiPluginProblems}.
@@ -882,34 +773,21 @@ function lanePluginProblems() {
     problems.push("host-package/package.json declares a dsh.client half; the client lives in lane-plugin-ui/ now, and a preset row's client half is never scanned");
   }
 
-  // The prompt template, the host roster and the client page must name the same
-  // lanes. Each pattern matches that file's own roster shape rather than any
-  // `key:` literal, so the page's React option keys are not mistaken for lanes.
-  const keysIn = (source, pattern) => {
-    const found = new Set();
-    for (const [, key] of source.matchAll(pattern)) found.add(key);
-    return found;
-  };
-  const tables = {
-    "prompts.template.js": keysIn(readFileSync(join(DSH_LANE_PLUGIN_SRC, "prompts.template.js"), "utf8"), /\{\{prompt:([\w-]+)\}\}/g),
-    "host-package/src/index.js": keysIn(laneHostTemplate(), /key:\s*'([\w-]+)',\s*tool:/g),
-    "lane-plugin-ui/lib/client.js": keysIn(laneUiClientSource(), /key:\s*'([\w-]+)',\s*zh:/g),
-  };
-  for (const [file, found] of Object.entries(tables)) {
-    for (const key of DSH_LANE_KEYS) {
-      if (!found.has(key)) problems.push(`${file} is missing lane '${key}'`);
-    }
-    for (const key of found) {
-      if (!DSH_LANE_KEYS.includes(key)) problems.push(`${file} names unknown lane '${key}'`);
-    }
+  const agents = agentRoster();
+  for (const key of DSH_LANE_KEYS) {
+    if (!Object.hasOwn(agents, key)) problems.push(`lane '${key}' has no agent record`);
   }
+  if (!laneHostTemplate().includes("from './roster.generated.js'")) problems.push("host module does not import the rendered roster");
 
   return problems;
 }
 
-/** The lane settings page's client bundle, unmodified. */
+/** Render the browser page's display names from the same authored lane record. */
 function laneUiClientSource() {
-  return readFileSync(join(DSH_LANE_UI_SRC, "lib", "client.js"), "utf8");
+  const template = readFileSync(join(DSH_LANE_UI_SRC, "lib", "client.js"), "utf8");
+  const marker = '"__MY_WORKBENCH_LANES__"';
+  if (template.indexOf(marker) < 0 || template.indexOf(marker) !== template.lastIndexOf(marker)) throw new Error("lane UI must contain exactly one roster marker");
+  return template.replace(marker, JSON.stringify(dshLanes().map(({ key, zh }) => ({ key, zh }))));
 }
 
 /** The lane settings page's manifest (single source: lane-plugin-ui/package.json). */
@@ -944,6 +822,8 @@ function laneUiPluginProblems() {
     problems.push("lane-plugin-ui/package.json exports no './client', so dsh-client-modules would refuse the package");
   } else if (!existsSync(join(DSH_LANE_UI_SRC, clientTarget))) {
     problems.push(`lane-plugin-ui/package.json exports './client' -> '${clientTarget}', which does not exist`);
+  } else if (clientTarget !== "./lib/client.js") {
+    problems.push(`lane-plugin-ui/package.json exports './client' -> '${clientTarget}', but the rendered page installs as './lib/client.js'`);
   }
   const hostTarget = exportsField["."];
   if (typeof hostTarget !== "string" || !existsSync(join(DSH_LANE_UI_SRC, hostTarget))) {
@@ -951,7 +831,7 @@ function laneUiPluginProblems() {
   }
 
   if (clientTarget === undefined || typeof clientTarget !== "string") return problems;
-  const bundle = readFileSync(join(DSH_LANE_UI_SRC, clientTarget), "utf8");
+  const bundle = laneUiClientSource();
 
   // The only registration seam the browser module table accepts.
   if (!bundle.includes("window.__ModuleLoader__.load(")) {
@@ -1016,7 +896,7 @@ async function laneUiHostProblem(file) {
 function installLaneUiPlugin(presetRoot, display, opts, counts) {
   copyOne(join(DSH_LANE_UI_SRC, "package.json"), join(presetRoot, DSH_LANE_UI_DIR, "package.json"), display, counts);
   copyOne(join(DSH_LANE_UI_SRC, "src", "index.js"), join(presetRoot, DSH_LANE_UI_DIR, "src", "index.js"), display, counts);
-  copyOne(join(DSH_LANE_UI_SRC, "lib", "client.js"), join(presetRoot, DSH_LANE_UI_DIR, "lib", "client.js"), display, counts);
+  writeAgent(join(presetRoot, DSH_LANE_UI_DIR, "lib", "client.js"), laneUiClientSource(), display, counts);
 }
 
 /**
@@ -1133,6 +1013,7 @@ function installLanePlugin(presetRoot, display, opts, counts, specifiers, usedSl
   const src = DSH_LANE_PLUGIN_SRC;
   copyOne(join(src, "host-package", "package.json"), join(presetRoot, DSH_LANE_PLUGIN_DIR, "package.json"), display, counts);
   writeAgent(join(presetRoot, DSH_LANE_PLUGIN_DIR, "src", "index.js"), renderLaneHost(specifiers), display, counts);
+  writeAgent(join(presetRoot, DSH_LANE_PLUGIN_DIR, "src", "roster.generated.js"), laneRosterSource(), display, counts);
   writeAgent(join(presetRoot, DSH_LANE_PLUGIN_DIR, "src", "prompts.generated.js"), renderLanePrompts(usedSlots), display, counts);
 }
 
@@ -1234,12 +1115,12 @@ function applyDsh(opts, counts) {
   const shown = userLevel ? `~/${relative(homedir(), presetRoot).split(sep).join("/")}` : presetRoot;
   // Resolve the plugin's two deployment imports BEFORE the first write: a DSH
   // home that cannot supply them must fail with nothing half-installed.
-  const specifiers = resolveLaneDependencies(home);
+  const specifiers = resolveLaneDependencies(home, DSH_LANE_PLUGIN_DEPS);
   const usedSlots = new Set();
   console.log(`\n${shown}/  (user-level: preset.yml, agent.cordis.yml, lane-plugin/, lane-plugin-ui/)`);
   copyOne(join(PKG_ROOT, "agents", "backends", "dsh", "preset.yml"), join(presetRoot, "preset.yml"), display, counts);
   writeAgent(join(presetRoot, "agent.cordis.yml"), renderDshComposition(usedSlots), display, counts);
-  console.log(`  ${DSH_LANE_PLUGIN_DIR}/  (preset-mounted: host half + 7 specialist prompts)`);
+  console.log(`  ${DSH_LANE_PLUGIN_DIR}/  (preset-mounted: host half + ${DSH_LANE_KEYS.length} specialist prompts)`);
   installLanePlugin(presetRoot, display, opts, counts, specifiers, usedSlots);
   console.log(`  ${DSH_LANE_UI_DIR}/  (profile-mounted: the settings page)`);
   installLaneUiPlugin(presetRoot, display, opts, counts);
@@ -1361,7 +1242,6 @@ function syncOpencodeAssets({ check }) {
     const srcRoot = join(PKG_ROOT, "agents", "backends", backendName);
     walk(srcRoot, srcRoot, (fileAbs) => {
       const rel = relative(srcRoot, fileAbs);
-      if (rel === "agents.json") return; // assembly metadata, not a target asset
       if (rel.startsWith("slots/")) return; // {{slot:...}} texts, not runtime assets
       const dest = join(destRoot, rel);
       const content = renderOpencodeAsset(backendName, rel, readFileSync(fileAbs, "utf8"));
@@ -1437,6 +1317,11 @@ async function assembleCommand({ check }) {
   let outdated = 0;
   const usedSlots = new Set();
 
+  for (const problem of agentSourceProblems()) {
+    console.log(`${check ? "check FAILED" : "error"}: ${problem}`);
+    outdated++;
+  }
+
   for (const name of Object.keys(backend.agents).sort()) {
     const dest = join(outDir, `${name}.md`);
     const content = assembleAgent("claude", name, usedSlots);
@@ -1458,7 +1343,7 @@ async function assembleCommand({ check }) {
 
   // The OpenBitFun agents install at user level, so no generated file lives in
   // this repository to regenerate or compare. Render them anyway: a prompt body
-  // this tree no longer has, an agents.json entry that references it, or an
+  // this tree no longer has, a roster entry that references it, or an
   // unresolved {{slot:...}} fails here instead of at install time.
   const openbitfunSlots = new Set();
   const openbitfunFailures = [];
@@ -1479,9 +1364,8 @@ async function assembleCommand({ check }) {
 
   // The DSH preset and its lane plugin install at user level, so no generated
   // file lives in this repository to regenerate or compare. Render them anyway:
-  // an unresolved {{prompt:...}}/{{slot:...}}/{{dep:...}}, a prompt this tree no
-  // longer has, or a lane the three lane tables disagree about fails here
-  // instead of at install time or at DSH session start.
+  // an unresolved placeholder or an invalid authored lane fails here instead
+  // of at install time or at DSH session start.
   const dshSlots = new Set();
   const dshFailures = [];
   try {
@@ -1500,8 +1384,9 @@ async function assembleCommand({ check }) {
     const host = renderLaneHost(
       Object.fromEntries(Object.entries(DSH_LANE_PLUGIN_DEPS).map(([alias, pkg]) => [alias, pkg])),
     );
+    const roster = laneRosterSource();
     const prompts = renderLanePrompts(dshSlots);
-    if (!check) console.log(`rendered: agents/backends/dsh/lane-plugin/ (${host.length + prompts.length} bytes)`);
+    if (!check) console.log(`rendered: agents/backends/dsh/lane-plugin/ (${host.length + roster.length + prompts.length} bytes)`);
     const promptsProblem = await lanePromptsProblem(prompts);
     if (promptsProblem !== undefined) dshFailures.push(`lane-plugin prompts.generated.js: ${promptsProblem}`);
     for (const problem of lanePluginProblems()) dshFailures.push(`lane-plugin: ${problem}`);
@@ -1519,15 +1404,12 @@ async function assembleCommand({ check }) {
       const problem = await laneUiHostProblem(join(DSH_LANE_UI_SRC, hostRel));
       if (problem !== undefined) dshFailures.push(`lane-plugin-ui: ${problem}`);
     }
-    if (!check) console.log("rendered: agents/backends/dsh/lane-plugin-ui/ (copied verbatim)");
+    if (!check) console.log("rendered: agents/backends/dsh/lane-plugin-ui/ (client roster rendered)");
   } catch (err) {
     dshFailures.push(`lane-plugin-ui: ${err.message}`);
   }
-  // Parse-check the plugin's shipped JavaScript. `host-package/src/index.js` is
-  // checked raw: its {{dep:...}} placeholders sit inside string literals, so the
-  // template is valid ESM with or without them filled. prompts.template.js is
-  // deliberately absent — it is a template whose {{prompt:...}} placeholders are
-  // not valid JavaScript; its RENDERED form is parsed and inspected above.
+  // Parse-check the authored JavaScript; prompt and roster modules are rendered
+  // from JSON and prompt text above. Host dependency placeholders sit in strings.
   for (const file of [
     join(DSH_LANE_PLUGIN_SRC, "host-package", "src", "index.js"),
     join(DSH_LANE_UI_SRC, "src", "index.js"),

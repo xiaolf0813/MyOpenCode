@@ -1,7 +1,7 @@
 /**
  * MyWorkbench lane plugin — HOST half.
  *
- * One packaged DSH agent-preset plugin that owns the seven MyWorkbench
+ * One packaged DSH agent-preset plugin that owns the MyWorkbench
  * specialist lanes: it registers one model-facing delegation tool per
  * specialist, reads each lane's provider/model/reasoningEffort pin from its own
  * persisted settings namespace, and applies that specialist's read-only
@@ -42,6 +42,7 @@
 import { defineTool } from '{{dep:dsh-tools}}'
 import z from '{{dep:schemastery}}'
 import { LANE_PROMPTS } from './prompts.generated.js'
+import { LANES } from './roster.generated.js'
 
 /** Plugin name reported to the loader. */
 export const name = 'my-workbench-lanes'
@@ -64,99 +65,24 @@ export const Config = z.object({
 
 // ── the roster ──────────────────────────────────────────────────────────────
 
-/**
- * The seven lanes. `key` is the settings key, the prompt key and the lane
- * label; `tool` is the model-facing tool name; `zh` is display-only text the
- * settings page shows beside the lane.
- *
- * Tool names stay `subagent_*`: the dispatch text the orchestrator already reads
- * names them (`agents/backends/dsh/slots/dispatch.md`), the `toolFilter` deny
- * lists are written against them, and preset scoping makes a global collision
- * impossible — no other preset binds to this composition's standing scope.
- */
-const LABELS = [
-  { key: 'explorer', tool: 'subagent_explorer', zh: '代码库导航' },
-  { key: 'librarian', tool: 'subagent_librarian', zh: '文档与外部代码研究' },
-  { key: 'oracle', tool: 'subagent_oracle', zh: '战略技术顾问 / 评审' },
-  { key: 'ui-designer', tool: 'subagent_ui_designer', zh: 'UI 设计' },
-  { key: 'fixer', tool: 'subagent_fixer', zh: '实现' },
-  { key: 'observer', tool: 'subagent_observer', zh: '视觉分析' },
-  { key: 'improver', tool: 'subagent_improver', zh: '失败复盘与改进' }
-]
-
-/** Every lane tool name, in roster order. */
+// The CLI renders this module from agents/backends/dsh/lanes.json at install time.
+const LABELS = LANES
 const LANE_TOOLS = LABELS.map((lane) => lane.tool)
-
-/**
- * The shell tool this platform registers. Resolved in-process at registration
- * time, which is strictly safer than the composition's `!!js` conditional
- * (agents/backends/dsh/agent.cordis.yml:250): `ctx.tools.restrict()` throws on
- * an unknown name (nm/dsh-tools/lib/index.js:2802-2803), and naming the other
- * platform's shell would make every observer/improver spawn fail.
- */
 const SHELL = process.platform === 'win32' ? 'pwsh' : 'bash'
 
-/** Every lane tool except `tool`. */
 function otherLanes(tool) {
   return LANE_TOOLS.filter((candidate) => candidate !== tool)
 }
 
-/**
- * Per-lane tool restrictions, copied verbatim from the preset rows these tools
- * replace (`agents/backends/dsh/agent.cordis.yml:192,203,214,227,239,250,261`).
- *
- * These work because `toolFilter` is applied by the spawn driver
- * (nm/dsh-subagent/lib/index.js:554 `childCtx.tools.restrict(composition.toolFilter)`)
- * and `restrict()` accepts a name only if it is in the child's restrictable set —
- * the global layer plus every ANCESTOR layer on the child's scope chain, never
- * its own (nm/dsh-tools/lib/index.js:2865-2868, rationale at :2839-2850). A lane
- * child joins its parent's standing composition
- * (nm/dsh-agent-presets/lib/index.js:1533-1539), so the tools registered here are
- * an ancestor contribution to the child: restrictable and effective.
- */
-const TOOL_FILTERS = {
-  explorer: { deny: ['write', 'edit', ...otherLanes('subagent_explorer')] },
-  librarian: { deny: ['write', 'edit', ...otherLanes('subagent_librarian')] },
-  oracle: { deny: ['write', 'edit', ...otherLanes('subagent_oracle')] },
-  // ui-designer writes its own mockup/spec deliverables, so it keeps write/edit;
-  // it still never touches app source (its prompt's job).
-  'ui-designer': { deny: otherLanes('subagent_ui_designer') },
-  // fixer is the only lane that implements: full tools, still a leaf.
-  fixer: { deny: otherLanes('subagent_fixer') },
-  observer: { deny: ['write', 'edit', SHELL, ...otherLanes('subagent_observer')] },
-  improver: { deny: ['write', 'edit', SHELL, ...otherLanes('subagent_improver')] }
-}
+const TOOL_FILTERS = Object.fromEntries(LABELS.map((lane) => [lane.key, {
+  deny: [
+    ...(lane.denyWrites ? ['write', 'edit'] : []),
+    ...(lane.denyShell ? [SHELL] : []),
+    ...otherLanes(lane.tool)
+  ]
+}]))
 
-/**
- * The recommended lane mapping, shipped as the settings namespace's composition
- * `base` layer: a fresh install already routes each lane sensibly, and
- * `settings.describe()` keeps reporting it as inherited rather than
- * user-overridden, which is what the shipped settings surface understands.
- *
- * The route must exist in the deployment's DSH profile. The settings page's
- * 改回继承 action writes explicit empty strings into the USER layer, which
- * overrides the base per lane — so a deployment whose profile lacks one of these
- * routes can be cleared lane by lane without editing this file.
- *
- * Every lane routes through `deepseek-official`, the route DSH's own
- * `llm-deepseek` adapter always provides, so the shipped mapping depends on no
- * provider a deployment has to add. `deepseek-v4-pro` carries every lane that
- * writes (or writes code): oracle, ui-designer, fixer, improver; the read-only
- * lanes that run often — explorer, librarian — take the economy
- * `deepseek-v4-flash`, and the vision lane DeepSeek's image-capable
- * `deepseek-v4-flash-vision-exp`. Efforts stay as they were chosen per lane
- * (`max` only where the lane carries final judgement); the route is what
- * changed, not the tiering.
- */
-const RECOMMENDED = {
-  explorer: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'low' },
-  librarian: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'low' },
-  oracle: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max' },
-  'ui-designer': { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
-  fixer: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' },
-  observer: { provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', reasoningEffort: 'low' },
-  improver: { provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'high' }
-}
+const RECOMMENDED = Object.fromEntries(LABELS.map((lane) => [lane.key, lane.recommended]))
 
 // ── the settings namespace ──────────────────────────────────────────────────
 
@@ -251,7 +177,7 @@ function lanePrompt(laneKey) {
  * Build one lane's model-facing tool.
  *
  * @param {object} ctx - the preset-scoped plugin context (for `ctx.subagents`).
- * @param {object} lane - roster entry `{ key, tool, zh }`.
+ * @param {object} lane - rendered roster entry.
  * @param {() => Record<string, object>} pins - live pins reader.
  * @param {string} persona - the lane's specialist prompt.
  * @param {number} maxDepth - child depth budget from the row config.
@@ -315,7 +241,7 @@ function laneTool(ctx, lane, pins, persona, maxDepth) {
 // ── the plugin ──────────────────────────────────────────────────────────────
 
 /**
- * Register the settings namespace and the seven lane tools.
+ * Register the settings namespace and the specialist lane tools.
  *
  * @param {object} ctx - the preset-scoped plugin context.
  * @param {{ maxDepth: number }} config - validated row config.
@@ -388,6 +314,6 @@ export function apply(ctx, config) {
 
   // No `ctx.systemPrompt.section()` on purpose. The preset's dispatch text
   // (`agents/backends/dsh/slots/dispatch.md`, rendered into the orchestrator
-  // persona) already names the seven `subagent_*` tools, so an extra section
+  // persona) already names the `subagent_*` tools, so an extra section
   // would only duplicate it and perturb request caching.
 }

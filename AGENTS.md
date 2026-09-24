@@ -1,6 +1,6 @@
 # AGENTS.md
 
-`agents/` is this repository's only content source: everything else — the generated agent files, the backend assets, the installed targets — is assembled from it. Validation is `node bin/my-workbench.js assemble --check` (which also renders the DSH composition and lane plugin, and loads the settings page's inert host half) plus, for CLI changes, running the CLI. There is no build and no test suite. Keep this file structural and lean: record where things live and what may not change, not how a mechanism works.
+`agents/` is this repository's only content source: everything else — the generated agent files, the backend assets, the installed targets — is assembled from it. Validation is `node bin/my-workbench.js assemble --check` (which also renders the DSH composition and lane plugin, and loads the settings page's inert host half) plus, for CLI changes, running the CLI. `npm test` covers DSH dependency resolution and an isolated DSH install. There is no build. Keep this file structural and lean: record where things live and what may not change, not how a mechanism works.
 
 ## Targets
 
@@ -30,10 +30,11 @@ Every target downloads nothing and writes nothing inside a project; existing fil
 
 | Path | Role |
 | --- | --- |
-| `bin/my-workbench.js` | The CLI (zero dependencies, ESM). |
+| `bin/my-workbench.js`, `bin/dsh-deps.js` | The CLI and its DSH dependency resolver (zero dependencies, ESM). |
+| `agents/roster.json` | Agent descriptions and backend frontmatter; the only authored agent list. |
 | `agents/prompts/` | Agent prompt bodies — the single source, each opening with the omos attribution notice. |
 | `agents/prompts_cn/` | Chinese reference translations of the prompt bodies — never packaged. |
-| `agents/backends/<name>/` | Everything backend-specific: the assets copied to a target, plus `agents.json` (frontmatter per agent, markdown backends) and `slots/` for `{{slot:...}}` text. `dsh/` is template-only — no `agents.json`: `agent.cordis.yml` lists the rows and pulls prompt bodies with `{{prompt:<agent>}}`, `lane-plugin/` is the packaged host half the preset mounts, `lane-plugin-ui/` the settings page the profile mounts. |
+| `agents/backends/<name>/` | Backend-specific assets and `slots/` for `{{slot:...}}` text. `dsh/` also has `lanes.json`, the single authored DSH lane record; `agent.cordis.yml` pulls the orchestrator body with `{{prompt:<agent>}}`, `lane-plugin/` is the packaged host half, and `lane-plugin-ui/` is the settings page. |
 | `docs/` | Reference only, never shipped: the DSH lane plugin's design record (`docs/dsh-lane-plugin/`) and the agent-skill notes (`docs/agents/`). |
 | `.claude/`, `.opencode/` | This repo's own live agent setup — generated, gitignored; materialize with `npx my-workbench assemble`. |
 | `package.json` | npm package **`my-workbench`**; the `files` whitelist is the tarball contract. |
@@ -49,7 +50,8 @@ Every target downloads nothing and writes nothing inside a project; existing fil
 | `agents/backends/omos/oh-my-opencode-slim.jsonc` | `.opencode/oh-my-opencode-slim.jsonc` |
 | `agents/backends/omos/oh-my-opencode-slim/` | `.opencode/oh-my-opencode-slim/` |
 | `agents/backends/omos/package.json` | `.opencode/package.json` |
-| `agents/disciplines.md` + `agents/prompts/*.md` + `agents/backends/*/agents.json` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
+| `agents/roster.json` + `agents/disciplines.md` + `agents/prompts/*.md` + `agents/backends/*/slots/*.md` | `.claude/agents/*.md`, target `.opencode/agents/*.md` |
+| `agents/backends/dsh/lanes.json` + `agents/prompts/*.md` | installed DSH `roster.generated.js`, `prompts.generated.js`, and lane settings page roster |
 | `agents/backends/zcode/`, `agents/backends/dsh/`, `agents/backends/openbitfun/` | user-level only, nothing generated inside this repo: `~/.zcode/`, `~/.dsh/.agent-presets/my-workbench/`, and `<OpenBitFun config>/agents/` |
 
 Run `npx my-workbench assemble` in the repo root after editing any source (`--check` verifies without writing).
@@ -62,11 +64,11 @@ Run `npx my-workbench assemble` in the repo root after editing any source (`--ch
 
 ## Editing conventions
 
-- **Agent prompts / roster** → edit `agents/prompts/*.md`; in the same change update the matching `agents/prompts_cn/<agent>_cn.md` and keep frontmatter in `agents/backends/*/agents.json` in sync; then assemble. Keep the omos attribution notice that opens each adapted body verbatim and first: `stripAttribution()` drops it from every generated prompt by exact match, so an edited or moved notice ships into the delivered text. `agents/prompts/improver.md` is in-house and deliberately carries none — do not add one.
+- **Agent prompts / roster** → edit the agent's record in `agents/roster.json` and its `agents/prompts/<agent>.md`; in the same change update `agents/prompts_cn/<agent>_cn.md`, then assemble. `assemble --check` rejects orphan prompts and missing reference translations in a source checkout. Keep the omos attribution notice that opens each adapted body verbatim and first: `stripAttribution()` drops it from every generated prompt by exact match, so an edited or moved notice ships into the delivered text. `agents/prompts/improver.md` is in-house and deliberately carries none — do not add one.
 - **Backend-specific text** → `{{slot:<name>}}` in `agents/prompts/*.md`, filled from `agents/backends/<name>/slots/<name>.md`. A slot referenced by any prompt must exist for every backend or assembly fails.
 - **Universal behavior rules** → `agents/disciplines.md` is the single authored copy, with `agents/disciplines_cn.md` beside it. Assembly appends the English file to every delivered agent prompt — markdown backends, DSH preset persona and DSH lane personas — so no delegation brief repeats it. One rule per concern.
 - **DSH preset composition** → `agents/backends/dsh/agent.cordis.yml` is the template: the orchestrator persona plus ONE row (`- id: lanes`) naming the lane plugin with a `./`-relative `name`. A `{{prompt:<agent>}}` placeholder must stand alone on its own line.
-- **DSH lane plugin (host half)** → `agents/backends/dsh/lane-plugin/`. The roster, the per-lane `toolFilter` deny lists and the recommended model mapping live in `host-package/src/index.js`; prompts are not duplicated — `prompts.template.js` pulls them into `src/prompts.generated.js`. Adding a specialist means its roster entry, its prompt placeholder, its row in the settings page, and its `toolName` in every other lane's deny list (a lane stays a leaf; `tools.restrict()` rejects unknown names, so a stale list fails loudly at spawn). `assemble --check` proves the three lane tables agree; reinstall with `npx my-workbench --dsh`.
+- **DSH lane plugin (host half)** → `agents/backends/dsh/lane-plugin/`. `agents/backends/dsh/lanes.json` owns lane keys, tool names, display labels, restrictions and recommended routes. The CLI renders the host roster, browser roster and prompt module from it; each lane key must have an agent record. `tools.restrict()` rejects unknown names, so keep every lane a leaf. `assemble --check` validates the authored records and render; reinstall with `npx my-workbench --dsh`.
 - **DSH lane settings page** → `agents/backends/dsh/lane-plugin-ui/`, mounted by a profile row, NOT by the preset. `src/index.js` stays inert — no tools, no services, no settings namespace — and `lib/client.js` uses only the shipped Remote wire (`ctx.remote.settings.describe()/update()`, `ctx.remote.session.modelCatalog()`), never a package-private RPC. Its registration stays SYNCHRONOUS in `apply()`. The CLI owns the profile row (`writeLaneUiPatchRow`); do not hand-edit the installed `cordis.patch.yml`. Rationale for each of these sits in `docs/dsh-lane-plugin/` and the package's own `README.md`.
 - **Bare imports in the lane plugin are forbidden** except through a `{{dep:<alias>}}` placeholder declared in `DSH_LANE_PLUGIN_DEPS` (`bin/my-workbench.js`), which `--dsh` bakes into an absolute `file:` URL at install time — a plugin under `$DSH_HOME/.agent-presets/` cannot resolve a package by name. The settings page declares no dependencies, and its browser half may only `require` the shell's nine seed modules; `assemble --check` enforces both plus the `dsh.client`/`exports["./client"]` pair DSH scans for.
 - **Model / variant / council presets** → `agents/backends/omos/oh-my-opencode-slim.jsonc`. Keep JSONC parseable (comments and trailing commas allowed).

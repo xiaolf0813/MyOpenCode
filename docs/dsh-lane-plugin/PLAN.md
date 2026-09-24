@@ -3,8 +3,8 @@
 > **STATUS: implemented.** Phase 2 built this plan and Phase 3 amended it; all decisions
 > were locked by the user before implementation. Where this document and the code
 > disagree, the code wins — the shipped files are `host-package/src/index.js`,
-> `../lane-plugin-ui/{src/index.js,lib/client.js}`, `prompts.template.js`,
-> `bin/my-workbench.js` and `agents/backends/dsh/agent.cordis.yml`, with `README.md` /
+> `../lane-plugin-ui/{src/index.js,lib/client.js}`, `../lanes.json`,
+> `bin/{my-workbench,dsh-deps}.js` and `agents/backends/dsh/agent.cordis.yml`, with `README.md` /
 > `README_CN.md` / `AGENTS.md` describing the result.
 >
 > What each lock changed against the draft below:
@@ -53,10 +53,10 @@ Source of truth in this repository (template-only, next to the composition templ
 ```
 agents/backends/dsh/
   agent.cordis.yml               # composition template: persona + ONE row naming the lane plugin
+  lanes.json                     # authored lane keys, tools, labels, permissions and model routes
   preset.yml                     # picker metadata
   slots/dispatch.md              # the {{slot:dispatch}} text inside the orchestrator prompt
   lane-plugin/                   # the packaged HOST half (preset row: ./lane-plugin/src/index.js)
-    prompts.template.js          # one {{prompt:<agent>}} per lane -> src/prompts.generated.js
     host-package/
       package.json
       src/index.js               # host half; {{dep:<alias>}} -> file: URL at install
@@ -138,25 +138,7 @@ The group wrapper may stay for readability. `tool-subagent-control` (`:174-178`)
 
 ## 3. How the prompts ship
 
-`agents/prompts/*.md` stays the single source. The CLI renders them into a generated data module next to the plugin, exactly the way it already renders `{{prompt:...}}` into the composition (`bin/my-workbench.js:64` `PROMPT_RE`, `:393-400` `promptBody`, `:410-427` `fillPrompts`, `:430-436` `renderDshComposition`).
-
-**Template** (`agents/backends/dsh/lane-plugin/prompts.template.js`):
-
-```js
-// GENERATED — do not edit. Assembled from agents/prompts/*.md by `my-workbench --dsh`.
-// One entry per MyWorkbench lane; the value is the specialist's prompt verbatim.
-export const LANE_PROMPTS = {
-  explorer: '{{prompt:explorer}}',
-  librarian: '{{prompt:librarian}}',
-  oracle: '{{prompt:oracle}}',
-  'ui-designer': '{{prompt:ui-designer}}',
-  fixer: '{{prompt:fixer}}',
-  observer: '{{prompt:observer}}',
-  improver: '{{prompt:improver}}'
-}
-```
-
-**New CLI helper required.** `fillPrompts` indents a YAML literal block to the placeholder's column (`bin/my-workbench.js:418-425`), which is wrong for a single-quoted JS string. Add a sibling `fillPromptsJson(template, backendName, usedSlots)` that applies `JSON.stringify(fillSlots(promptBody(agent), backendName, usedSlots))` per match. The lane keys stay `[\w-]+` so `PROMPT_RE` matches them (`bin/my-workbench.js:64`); `ui-designer` is a valid key and needs the quotes shown above. `JSON.stringify` handles the newlines and the non-ASCII text; the file must be written UTF-8.
+`agents/prompts/*.md` stays the prompt source. `agents/backends/dsh/lanes.json` supplies the lane keys; the CLI renders each corresponding prompt into `src/prompts.generated.js` with `JSON.stringify`, and renders the host and page rosters from the same record. The DSH composition still embeds the orchestrator with `{{prompt:orchestrator}}`. The former `prompts.template.js` and its second handwritten key list were removed.
 
 **Alternative considered and rejected:** shipping the seven `*.md` files beside the plugin and reading them with `node:fs` at runtime. It works, but it needs runtime file I/O and a path resolved from `import.meta.url`, and it puts a second copy of the prompt text on disk that `assemble --check` cannot verify.
 

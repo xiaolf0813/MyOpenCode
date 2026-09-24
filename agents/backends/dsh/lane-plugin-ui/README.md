@@ -27,7 +27,7 @@ Nothing else: no tools, no prompt sections, no services, no packages installed i
 
 `apply()` registers the `settings.section` page **synchronously** — no probe, no `await` before `slots.register`. The component decides what to show:
 
-- **Namespace present** → the seven lanes with a model select and an effort select.
+- **Namespace present** → the specialist lanes with a model select and an effort select.
 - **Namespace absent** → an inert placeholder: no selects, no writes.
 
 Why the gate moved into the component: registering *after* an `await` (the first implementation probed `describe()` up to six times, 500 ms apart, before registering) left the shell's ledger entry for this section `active: false` while every other section was `active: true`. The nav entry appeared, the panel rendered blank, and `clientPath(...)` was fine — the registration itself was the problem, not discovery.
@@ -40,7 +40,7 @@ A class error boundary (`RenderGuard`) wraps the page, so a throw in its render 
 
 ```powershell
 # after `npx my-workbench --dsh --force` and a page refresh:
-#   settings → MyWorkbench 赛道模型 shows seven lanes
+#   settings → MyWorkbench 赛道模型 shows the specialist lanes
 Select-String -Path "$env:USERPROFILE\.dsh\profiles\web\cordis.patch.yml" -Pattern 'my-workbench-lanes-ui'
 
 # rollback: remove the preset directory AND the marked block

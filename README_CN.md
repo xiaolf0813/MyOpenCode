@@ -86,12 +86,13 @@ npx my-workbench assemble [--check] # 本仓库内：重新生成 .claude/agents
 lane-plugin/                        # preset 行：./lane-plugin/src/index.js
 ├── package.json                    # 名称 my-workbench-lanes（仅 Host 半，不含浏览器半）
 ├── src/index.js                    # Host 半：7 个委派工具 + 设置命名空间
+├── src/roster.generated.js         # Host 赛道字段，由 dsh/lanes.json 渲染而来
 └── src/prompts.generated.js        # 7 条提示词，由 agents/prompts/*.md 渲染而来
 
 lane-plugin-ui/                     # profile 行：file:///…/lane-plugin-ui/src/index.js
 ├── package.json                    # 名称 my-workbench-lanes-ui，exports "./client"，dsh.client.platform "web"
 ├── src/index.js                    # 惰性 Host 半：什么都不注册
-└── lib/client.js                   # 手写的浏览器半：设置页面
+└── lib/client.js                   # 设置页面，显示标签由 dsh/lanes.json 渲染而来
 ```
 
 - Host 行的 `name` 是**相对路径**（`./lane-plugin/src/index.js`）：预设行的裸包名解析基准是 host 组合的位置而非 preset 目录，因此随组合一起分发的包无法被找到。
@@ -144,42 +145,41 @@ npx my-workbench --dsh --force        # （重新）写入 ~/.dsh/.agent-presets
 agents/
 ├── disciplines.md    # 通用纪律，组装时追加到每个 agent 提示词末尾
 ├── disciplines_cn.md # disciplines.md 的中文参考译文（永不打包）
+├── roster.json       # 智能体描述与各后端 frontmatter 的唯一编写处
 ├── prompts/          # 每个智能体的提示词正文，仅一份（署名声明留在此处，组装时剥离）
 ├── prompts_cn/       # 中文参考翻译（永不打包）
 └── backends/         # 所有后端专属内容；每个后端可带 slots/*.md
                       # （后端专属文本，替换 agents/prompts/ 中的 {{slot:...}} 占位符）
     ├── claude/
     │   ├── settings.json   # 主线程智能体设置
-    │   └── agents.json     # 每个智能体的 frontmatter（name/tools/model）
+    │   └── slots/          # Claude 专属提示词文本
     ├── opencode/
-    │   ├── agents.json           # 每个智能体的 frontmatter（description/mode/tools）
+    │   ├── slots/                # OpenCode 专属提示词文本
     │   └── opencode.jsonc        # 核心配置
     ├── omos/
     │   ├── oh-my-opencode-slim.jsonc       # omos 项目配置
     │   ├── oh-my-opencode-slim/  # 提示词覆盖（<agent>_append.md）
     │   └── package.json          # 插件 node 依赖
     ├── zcode/
-    │   ├── agents.json     # 每个智能体的 frontmatter 字段（description/model/injectAgentsMd）
     │   └── slots/          # dispatch.md（每个后端都有，不逐一列出）
     ├── openbitfun/
-    │   ├── agents.json     # 每个智能体的 frontmatter（schema_version/kind/id/name/description/tools/readonly）
     │   └── slots/          # dispatch.md（orchestrator 提示词内的 {{slot:dispatch}}）
     └── dsh/
+        ├── lanes.json        # 赛道 key、工具、标签、权限和默认模型
         ├── agent.cordis.yml  # preset 组合文件；{{prompt:<agent>}} 内嵌 prompts/<agent>.md
         ├── preset.yml        # preset 展示元数据（name/description）
         ├── lane-plugin/      # preset 挂载的 Host 半（设计记录：docs/dsh-lane-plugin/）
-        │   ├── prompts.template.js    # 每条赛道一个 {{prompt:<agent>}} -> src/prompts.generated.js
         │   └── host-package/          # ESM 插件包：7 个赛道工具 + 设置命名空间
         │       ├── package.json
         │       └── src/index.js       # {{dep:<alias>}} 在安装时解析为 file: URL
         ├── lane-plugin-ui/   # profile 挂载的设置「页面」
         │   ├── package.json           # exports "./client"，dsh.client.platform "web"
         │   ├── src/index.js           # 惰性 Host 半（什么都不注册）
-        │   └── lib/client.js          # 手写的浏览器半
+        │   └── lib/client.js          # 带渲染后赛道名册的浏览器半
         └── slots/            # dispatch.md（orchestrator 提示词内的 {{slot:dispatch}}）
 ```
 
-在你的项目中，`.claude/agents/` 和 `.opencode/` 由它组装而来。编辑 `agents/`，然后运行 `npx my-workbench assemble`（`--check` 检测漂移）— 同样的工作流适用于本仓库和任何目标项目。提示词正文可以引用 `{{slot:<name>}}` 占位符；每个后端在 `agents/backends/<backend>/slots/` 中提供对应文本，提示词引用了某后端缺失的 slot 会导致组装失败。后端模板（`agents/backends/dsh/agent.cordis.yml`）还可以引用 `{{prompt:<agent>}}`，它把整份提示词正文就地嵌入而非重复一份；lane 插件的 `prompts.template.js` 使用同一个占位符，但渲染成 JS 数据模块而非 YAML 块。`assemble --check` 会渲染这两者与八个 OpenBitFun agents，并额外证明：提示词模板、host 名册与设置页面三者指向同样的七条赛道；两个 host 模块都能解析；页面包的 `dsh.client`/`./client` 声明与包名一致（这正是 DSH 扫描所需）；它的 require 只落在浏览器 shell 的九个种子模块内；其惰性 host 半可被导入且什么都不注册 —— 因此本树已无法解析的占位符、或浏览器根本无法应答的 require，都会在检查阶段失败，而不是等到安装或 DSH 会话启动。
+在你的项目中，`.claude/agents/` 和 `.opencode/` 由它组装而来。编辑 `agents/`，然后运行 `npx my-workbench assemble`（`--check` 检测漂移）— 同样的工作流适用于本仓库和任何目标项目。`agents/roster.json` 集中保存描述与各后端 frontmatter，检查会拒绝没有记录的提示词。提示词正文可以引用 `{{slot:<name>}}`；每个后端在 `agents/backends/<backend>/slots/` 中提供对应文本，缺少 slot 会导致组装失败。DSH 组合文件用 `{{prompt:<agent>}}` 嵌入提示词；`agents/backends/dsh/lanes.json` 驱动安装后的赛道提示词模块、host 名册和设置页面标签。`assemble --check` 会渲染这些内容及八个 OpenBitFun agents，检查页面包的 `dsh.client`/`./client` 声明和浏览器导入，并验证惰性 host 半可导入且不注册任何内容。
 
 ## 署名
 
